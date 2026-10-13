@@ -389,10 +389,10 @@ extension AppStore {
         let live = sessions.filter { terminals.isRunning($0.id) }
         guard !live.isEmpty else { return }
         let alert = NSAlert()
-        alert.messageText = "Stop all sessions?"
-        alert.informativeText = "\(live.count) running session\(live.count == 1 ? "" : "s") will be terminated."
-        alert.addButton(withTitle: "Stop All")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = String(localized: "Stop all sessions?")
+        alert.informativeText = String(localized: "Running sessions that will be terminated: \(live.count).")
+        alert.addButton(withTitle: String(localized: "Stop All"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         for s in live {
             terminals.stop(s.id)
@@ -445,7 +445,7 @@ extension AppStore {
     func addWorkspace(name: String? = nil) -> Workspace {
         let color = FolderColor.allCases[workspaces.count % FolderColor.allCases.count]
         let symbol = Workspace.symbols[workspaces.count % Workspace.symbols.count]
-        let ws = Workspace(name: name ?? "Workspace \(workspaces.count + 1)", symbol: symbol, color: color)
+        let ws = Workspace(name: name ?? String(localized: "Workspace \(workspaces.count + 1)"), symbol: symbol, color: color)
         workspaces.append(ws)
         selectWorkspace(ws.id)
         if name == nil { renamingWorkspaceID = ws.id }

@@ -8,7 +8,7 @@ struct SettingsView: View {
             PresetsSettings().tabItem { Label("Presets", systemImage: "list.bullet") }.tag("presets")
             IntegrationsSettings().tabItem { Label("Agents", systemImage: "sparkles") }.tag("agents")
             TerminalSettings().tabItem { Label("Terminal", systemImage: "terminal") }.tag("terminal")
-            UpdatesSettings().tabItem { Label("Updates", systemImage: "arrow.down.circle") }.tag("updates")
+            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }.tag("general")
         }
         .frame(width: 600, height: 520)
     }
@@ -54,13 +54,13 @@ private struct IntegrationsSettings: View {
         Form {
             Section("Claude Code") {
                 LabeledContent("Status hooks") {
-                    Text(installed ? "Installed" : "Not installed")
+                    Text(installed ? LocalizedStringKey("Installed") : LocalizedStringKey("Not installed"))
                         .foregroundStyle(installed ? .green : .secondary)
                 }
                 Text("Adds hooks to ~/.claude/settings.json so sessions report Working / Ready / Needs input and trigger notifications. Hooks do nothing outside Terminaly. A backup is saved as settings.json.terminaly-backup.")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
-                    Button(installed ? "Reinstall Hooks" : "Install Hooks") {
+                    Button(installed ? LocalizedStringKey("Reinstall Hooks") : LocalizedStringKey("Install Hooks")) {
                         run(ClaudeHookInstaller.install)
                     }
                     if installed {
@@ -166,12 +166,34 @@ private struct ThemeCard: View {
     }
 }
 
-private struct UpdatesSettings: View {
+private struct GeneralSettings: View {
     @State private var updater = Updater.shared
+    @State private var language = AppLanguage.current
+    @State private var languageChanged = false
     @Environment(\.openURL) private var openURL
 
     var body: some View {
         Form {
+            Section("Language") {
+                Picker("Language", selection: $language) {
+                    ForEach(AppLanguage.allCases) { Text($0.displayName).tag($0) }
+                }
+                .onChange(of: language) { _, l in
+                    AppLanguage.set(l)
+                    languageChanged = true
+                }
+                if languageChanged {
+                    HStack {
+                        Text("The language changes after restarting. Sessions keep running.")
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(Theme.secondaryText)
+                        Spacer()
+                        Button("Restart Terminaly") { AppLanguage.relaunch() }
+                            .buttonStyle(PrimaryButtonStyle(compact: true))
+                    }
+                }
+            }
+            Section("Updates") {
             LabeledContent("Version", value: Updater.currentVersion)
             if updater.isAvailable {
                 Toggle("Check for updates automatically", isOn: Binding(
@@ -189,6 +211,7 @@ private struct UpdatesSettings: View {
             } else {
                 Text("Updates are only available in the bundled app (scripts/bundle.sh).")
                     .foregroundStyle(.secondary)
+            }
             }
             Section {
                 Button("Buy Me a Coffee ☕") { openURL(Links.buyMeACoffee) }

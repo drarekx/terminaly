@@ -28,7 +28,7 @@ enum ClaudeHookInstaller {
 
     enum InstallError: LocalizedError {
         case invalidJSON
-        var errorDescription: String? { "~/.claude/settings.json is not valid JSON; left untouched." }
+        var errorDescription: String? { String(localized: "~/.claude/settings.json is not valid JSON; left untouched.") }
     }
 
     /// Idempotent: removes previous Terminaly entries, then adds current ones. Backs up the original file.

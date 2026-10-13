@@ -209,8 +209,8 @@ private struct ProjectHeader: View {
             } content: {
                 MenuSectionLabel(title: "New session in \(project.name)")
                 ForEach(store.presets) { preset in
-                    MenuRow(title: preset.label, icon: preset.symbol,
-                            subtitle: preset.command.isEmpty ? "login shell" : preset.command) {
+                    MenuRow(title: "\(preset.label)", icon: preset.symbol,
+                            subtitle: preset.command.isEmpty ? String(localized: "login shell") : preset.command) {
                         store.newSession(preset: preset, in: project)
                     }
                 }
@@ -332,7 +332,7 @@ private struct ProjectMenu: View {
         if !others.isEmpty {
             MenuSectionLabel(title: "Move to workspace")
             ForEach(others) { ws in
-                MenuRow(title: ws.name, icon: ws.symbol) { store.moveProject(project.id, to: ws.id) }
+                MenuRow(title: "\(ws.name)", icon: ws.symbol) { store.moveProject(project.id, to: ws.id) }
             }
             MenuDivider()
         }
@@ -392,11 +392,29 @@ struct SessionRow: View {
     }
 
     private var statusLine: String {
-        if session.status == .exited {
-            return "Exited" + (session.exitCode.map { " (\($0))" } ?? "")
+        switch session.status {
+        case .exited:
+            if let code = session.exitCode { return String(localized: "Exited (\(code))") }
+            return session.status.label
+        case .starting:
+            return String(localized: "Starting…")
+        default:
+            return "\(session.status.label) · \(Self.age(session.statusChangedAt))"
         }
-        let age = session.statusChangedAt.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated))
-        return session.status == .starting ? "Starting…" : "\(session.status.label) · \(age)"
+    }
+
+    /// "now", "4 min", "2 h"… in the app's language (not the system's, which may differ).
+    static func age(_ date: Date) -> String {
+        let seconds = max(0, Date().timeIntervalSince(date))
+        if seconds < 60 { return String(localized: "now") }
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .abbreviated
+        formatter.maximumUnitCount = 1
+        formatter.allowedUnits = [.minute, .hour, .day]
+        var calendar = Calendar.current
+        calendar.locale = AppLanguage.locale
+        formatter.calendar = calendar
+        return formatter.string(from: seconds) ?? ""
     }
 }
 

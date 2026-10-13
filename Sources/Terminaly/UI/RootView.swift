@@ -69,14 +69,14 @@ struct RootView: View {
                 }
                 .buttonStyle(PrimaryButtonStyle(compact: true))
                 .environment(\.workspaceAccent, store.accent.color)
-                .help("New \(store.presets.first?.label ?? "session") in \(store.currentProject?.name ?? "project") (⌘T)")
+                .help("New \(store.presets.first?.label ?? "") in \(store.currentProject?.name ?? "") (⌘T)")
                 PopoverMenuButton(width: 280, accent: store.accent.color) {
                     Image(systemName: "chevron.down")
                 } content: {
                     MenuSectionLabel(title: "New session in \(store.currentProject?.name ?? "project")")
                     ForEach(Array(store.presets.enumerated()), id: \.element.id) { i, preset in
-                        MenuRow(title: preset.label, icon: preset.symbol,
-                                subtitle: preset.command.isEmpty ? "login shell" : preset.command,
+                        MenuRow(title: "\(preset.label)", icon: preset.symbol,
+                                subtitle: preset.command.isEmpty ? String(localized: "login shell") : preset.command,
                                 shortcut: i == 0 ? "⌘T" : nil) {
                             store.newSession(preset: preset)
                         }

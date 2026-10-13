@@ -56,7 +56,9 @@ struct WorkspaceTitle: View {
         let projects = store.projects(in: workspace)
         let ids = Set(projects.map(\.id))
         let sessions = store.sessions.filter { ids.contains($0.projectID) && !$0.archived }.count
-        return "\(projects.count) project\(projects.count == 1 ? "" : "s") · \(sessions) session\(sessions == 1 ? "" : "s")"
+        let p = projects.count == 1 ? String(localized: "1 project") : String(localized: "\(projects.count) projects")
+        let s = sessions == 1 ? String(localized: "1 session") : String(localized: "\(sessions) sessions")
+        return "\(p) · \(s)"
     }
 
     private func commit() {
@@ -166,7 +168,7 @@ private struct WorkspaceDot: View {
             for id in ids { store.moveProject(id, to: workspace.id) }
             return !ids.isEmpty
         } isTargeted: { dropTarget = $0 }
-        .help(workspace.name + (attention > 0 ? " — \(attention) need input" : ""))
+        .help(attention > 0 ? String(localized: "\(workspace.name) — \(attention) need input") : workspace.name)
         .contextMenu { WorkspaceMenu(workspace: workspace) }
     }
 }
@@ -229,7 +231,7 @@ struct WorkspaceMenu: View {
         }
         Menu("Color") {
             ForEach(FolderColor.allCases, id: \.self) { c in
-                Button(c.rawValue.capitalized) {
+                Button(c.displayName) {
                     withAnimation(.smooth) { store.setWorkspaceStyle(workspace.id, color: c) }
                 }
             }
@@ -249,10 +251,10 @@ struct WorkspaceMenu: View {
         let count = store.projects(in: workspace).count
         guard count > 0 else { return withAnimation(.smooth) { store.deleteWorkspace(workspace.id) } }
         let alert = NSAlert()
-        alert.messageText = "Delete “\(workspace.name)”?"
-        alert.informativeText = "Its \(count) project\(count == 1 ? "" : "s") will move to another workspace. Sessions keep running."
-        alert.addButton(withTitle: "Delete")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = String(localized: "Delete “\(workspace.name)”?")
+        alert.informativeText = String(localized: "Its projects (\(count)) will move to another workspace. Sessions keep running.")
+        alert.addButton(withTitle: String(localized: "Delete"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
         if alert.runModal() == .alertFirstButtonReturn { withAnimation(.smooth) { store.deleteWorkspace(workspace.id) } }
     }
 }

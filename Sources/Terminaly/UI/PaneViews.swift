@@ -97,8 +97,8 @@ struct PaneView: View {
                     Button { store.toggleZoom(leafID) } label: {
                         Image(systemName: zoomed ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                     }
-                    .help(zoomed ? "Unzoom (⌘↩)" : "Zoom Pane (⌘↩)")
-                    .accessibilityLabel(zoomed ? "Unzoom" : "Zoom Pane")
+                    .help(zoomed ? LocalizedStringKey("Unzoom (⌘↩)") : LocalizedStringKey("Zoom Pane (⌘↩)"))
+                    .accessibilityLabel(zoomed ? LocalizedStringKey("Unzoom") : LocalizedStringKey("Zoom Pane"))
                 }
                 if multiPane {
                     Button { store.closePane(leafID) } label: { Image(systemName: "xmark") }
@@ -188,7 +188,13 @@ private struct ExitedBar: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "stop.circle").foregroundStyle(Theme.secondaryText)
-            Text("Process exited" + (session.exitCode.map { " with code \($0)" } ?? ""))
+            Group {
+                if let code = session.exitCode {
+                    Text("Process exited with code \(code)")
+                } else {
+                    Text("Process exited")
+                }
+            }
                 .font(Theme.Font.body)
                 .foregroundStyle(Theme.text)
             Spacer()
@@ -214,7 +220,13 @@ private struct DeadSessionView: View {
                 .font(.system(size: 28, weight: .medium))
                 .foregroundStyle(Theme.tertiaryText)
             Text(session.title).font(Theme.Font.title).foregroundStyle(Theme.text)
-            Text(session.command.isEmpty ? "Shell session is not running." : "\(session.command) is not running.")
+            Group {
+                if session.command.isEmpty {
+                    Text("Shell session is not running.")
+                } else {
+                    Text("\(session.command) is not running.")
+                }
+            }
                 .font(Theme.Font.body)
                 .foregroundStyle(Theme.secondaryText)
             Button { store.restart(session.id) } label: {
@@ -278,7 +290,7 @@ private struct PresetCard: View {
                 Text(preset.label)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text(preset.command.isEmpty ? "login shell" : preset.command)
+                Text(preset.command.isEmpty ? String(localized: "login shell") : preset.command)
                     .font(Theme.Font.mono)
                     .foregroundStyle(Theme.tertiaryText)
                     .lineLimit(1)

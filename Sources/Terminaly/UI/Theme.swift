@@ -34,6 +34,19 @@ extension Color {
 }
 
 extension FolderColor {
+    var displayName: String {
+        switch self {
+        case .blue: String(localized: "Blue")
+        case .purple: String(localized: "Purple")
+        case .pink: String(localized: "Pink")
+        case .red: String(localized: "Red")
+        case .orange: String(localized: "Orange")
+        case .yellow: String(localized: "Yellow")
+        case .green: String(localized: "Green")
+        case .gray: String(localized: "Gray")
+        }
+    }
+
     var rgb: (Double, Double, Double) {
         switch self {
         case .blue: (59, 130, 246)

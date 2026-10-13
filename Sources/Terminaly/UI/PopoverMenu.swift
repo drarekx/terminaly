@@ -39,7 +39,7 @@ struct MenuRow: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.workspaceAccent) private var accent
     @Environment(\.isEnabled) private var enabled
-    let title: String
+    let title: LocalizedStringKey
     var icon: String? = nil
     var subtitle: String? = nil
     var shortcut: String? = nil
@@ -96,9 +96,10 @@ struct MenuDivider: View {
 }
 
 struct MenuSectionLabel: View {
-    let title: String
+    let title: LocalizedStringKey
     var body: some View {
-        Text(title.uppercased())
+        Text(title)
+            .textCase(.uppercase)
             .font(.system(size: 11, weight: .semibold))
             .tracking(0.5)
             .foregroundStyle(Theme.tertiaryText)
@@ -123,8 +124,8 @@ struct ColorSwatchRow: View {
                         .padding(2)
                 }
                 .buttonStyle(.plain)
-                .help(c.rawValue.capitalized)
-                .accessibilityLabel(c.rawValue.capitalized)
+                .help(c.displayName)
+                .accessibilityLabel(c.displayName)
             }
         }
         .padding(.horizontal, 10)

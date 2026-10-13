@@ -12,6 +12,9 @@ enum Snapshot {
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         Task {
             try? await Task.sleep(for: .seconds(2.5))
+            // SwiftTerm pauses drawing while its window is occluded: bring it to the front.
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows.first { $0.isVisible }?.orderFrontRegardless()
             let store = AppStore.shared
             let env = ProcessInfo.processInfo.environment
             // Optional live shell so terminal colors show up in the capture.
@@ -56,7 +59,7 @@ enum Snapshot {
             PopoverMenu(width: 280) {
                 MenuSectionLabel(title: "New session in project")
                 ForEach(Array(store.presets.enumerated()), id: \.element.id) { i, p in
-                    MenuRow(title: p.label, icon: p.symbol, subtitle: p.command.isEmpty ? "login shell" : p.command,
+                    MenuRow(title: "\(p.label)", icon: p.symbol, subtitle: p.command.isEmpty ? String(localized: "login shell") : p.command,
                             shortcut: i == 0 ? "⌘T" : nil) {}
                 }
             }

@@ -18,6 +18,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Framewor
 cp "$BIN_DIR/Terminaly" "$APP/Contents/MacOS/Terminaly"
 cp "$BIN_DIR/tly" "$APP/Contents/MacOS/tly"
 ditto "$BIN_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
+cp -R Resources/*.lproj "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -29,6 +30,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key><string>com.drarek.terminaly</string>
   <key>CFBundleExecutable</key><string>Terminaly</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleLocalizations</key><array><string>en</string><string>es</string></array>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundleVersion</key><string>${BUILD}</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>

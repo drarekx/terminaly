@@ -59,11 +59,11 @@ enum SessionStatus: String, Codable {
 
     var label: String {
         switch self {
-        case .starting: "Starting"
-        case .working: "Working"
-        case .idle: "Ready"
-        case .needsInput: "Needs input"
-        case .exited: "Exited"
+        case .starting: String(localized: "Starting")
+        case .working: String(localized: "Working")
+        case .idle: String(localized: "Ready")
+        case .needsInput: String(localized: "Needs input")
+        case .exited: String(localized: "Exited")
         }
     }
 

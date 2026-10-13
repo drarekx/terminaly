@@ -2,7 +2,9 @@
 
 Orden aproximado por versiones. Esfuerzo: **S** (horas), **M** (1–2 días), **L** (varios días). Lo marcado con ★ lo ha pedido el usuario.
 
-## v0.3 — Pulido visual
+## v0.3 — Pulido visual ✅
+
+Hecho: menús en popover, botones legibles, escala tipográfica, interfaz en español (con selector de idioma), 6 temas de terminal y elección de fuente, zoom de panel (⌘↩) y arrastrar sesiones a paneles.
 
 | | Mejora | Qué y por qué | Esfuerzo |
 |---|---|---|---|

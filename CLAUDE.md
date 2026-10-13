@@ -37,7 +37,17 @@ Canvas: https://claude.ai/artifact/NXCTs7pMK3XnPDpKTfmoPY. Tokens en `UI/Theme.s
 - App siempre oscura (`preferredColorScheme(.dark)`). Fondo `0x0B0C0E`, tarjeta de terminal `0x0F1013`, texto `0xECECF1`.
 - Barra lateral: mezcla sólida del 20 % del color del workspace sobre grafito (`Theme.sidebar`), sin degradados.
 - El color del workspace (`store.accent`) marca foco, selección y botón principal. Los colores de estado (azul/verde/ámbar/gris en `SessionStatus.dot/text/tile`) son solo para agentes.
-- Textos de UI en inglés por ahora.
+- Tipografía: solo `Theme.Font` (12 pt mínimo para texto legible); texto secundario `Theme.secondaryText`/`tertiaryText`.
+- Botones: `PrimaryButtonStyle` (una acción principal por zona), `SecondaryButtonStyle`, `IconButtonStyle` (+ `.help`/`.accessibilityLabel`). El color del workspace llega por `@Environment(\.workspaceAccent)`: `Color.accentColor` ignora `.tint`. Los popovers viven en otra ventana; `PopoverMenuButton` les pasa el acento.
+- Menús frecuentes = `PopoverMenu` + `MenuRow`/`MenuSectionLabel`/`ColorSwatchRow`/`SymbolGrid`; los menús contextuales (clic derecho) siguen nativos.
+- Temas de terminal en `Terminal/TerminalTheme.swift` (`installColors` + fondo/texto/cursor); el fondo de la tarjeta del panel sigue al tema.
+
+## Idioma
+
+- Inglés es el idioma de desarrollo (las claves son el texto en inglés). Traducción en `Resources/es.lproj/Localizable.strings`; `bundle.sh` copia `Resources/*.lproj` al `.app`. Hace falta `en.lproj` aunque esté vacío, o un sistema en inglés recibe español.
+- Todo texto visible debe ser `LocalizedStringKey` (literal en `Text`/`Button`/`.help`, `MenuRow(title:)`) o `String(localized:)`. Un ternario de literales o un `String` concatenado NO se traduce: usa `LocalizedStringKey(...)` explícito o `if/else`.
+- Al añadir textos, extrae las claves y traduce las que falten: `swift build --product Terminaly -Xswiftc -emit-localized-strings -Xswiftc -emit-localized-strings-path -Xswiftc <dir>` genera `.stringsdata` (JSON) por archivo.
+- Selector en Ajustes → General (`AppLanguage`: escribe `AppleLanguages` del dominio de la app y relanza). Probar sin tocar ajustes: pasar `-AppleLanguages "(es)"` al ejecutable. El sistema del autor está en catalán con español detrás, así que "Sistema" muestra español.
 
 ## Comandos
 
@@ -46,11 +56,13 @@ swift build                                   # debug
 ./scripts/bundle.sh [release|debug]           # → build/Terminaly.app (incluye tly y Sparkle.framework)
 TERMINALY_STATE_DIR=$(mktemp -d) .build/debug/Terminaly --selftest   # test end-to-end, debe imprimir SELFTEST PASS
 TERMINALY_STATE_DIR=<dir con state.json> TERMINALY_SNAPSHOT_DIR=<out> build/Terminaly.app/Contents/MacOS/Terminaly
-                                              # renderiza la ventana a PNG (un archivo por workspace, máx 3)
+                                              # renderiza la ventana a PNG (un archivo por workspace, máx 3) + menus.png
+                                              # extra: TERMINALY_SNAPSHOT_SHELL='cmd' abre una shell real; TERMINALY_SETTINGS_TAB=terminal|general captura Ajustes
 ./scripts/release.sh 0.3.0 "notas"            # publica release + appcast (ver abajo)
 ```
 
 - **Verifica siempre con `--selftest`** antes de commitear cambios en store, daemon o protocolo. Cubre: workspaces (y migración si `SELFTEST_EXPECT_LEGACY_PROJECTS=N`), hooks → needsInput, heurística working → idle, y reinicio simulado de la app con replay.
+- El texto del terminal no siempre sale en la captura (el buffer sí lo tiene: compruébalo con `screenText()`); el resto de la UI sí es fiel.
 - Para cambios visuales usa el modo snapshot: no hay permiso de grabación de pantalla, pero la app se pinta a sí misma (`cacheDisplay`). Siembra un `state.json` de prueba en un directorio temporal; nunca uses el estado real del usuario.
 - Usa siempre `TERMINALY_STATE_DIR` en pruebas: si no, tocarías `~/Library/Application Support/Terminaly` (datos reales y el daemon real).
 

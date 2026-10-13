@@ -15,7 +15,7 @@ enum Notifier {
         guard available, UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? true else { return }
         let content = UNMutableNotificationContent()
         content.title = session.title + (project.map { " · \($0.name)" } ?? "")
-        content.body = detail ?? (status == .needsInput ? "Needs your input" : "Finished")
+        content.body = detail ?? (status == .needsInput ? String(localized: "Needs your input") : String(localized: "Finished"))
         content.sound = .default
         content.userInfo = ["sessionID": session.id.uuidString]
         let req = UNNotificationRequest(identifier: session.id.uuidString, content: content, trigger: nil)
