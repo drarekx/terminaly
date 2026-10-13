@@ -22,6 +22,7 @@ BUILD="$(git rev-list --count HEAD)"
 ZIP="build/Terminaly-$VERSION.zip"
 rm -f "$ZIP"
 ditto -c -k --sequesterRsrc --keepParent build/Terminaly.app "$ZIP"
+cp "$ZIP" build/Terminaly.zip   # stable name for install.sh (releases/latest/download/Terminaly.zip)
 SIGNATURE="$("$SPARKLE_BIN/sign_update" "$ZIP")"   # sparkle:edSignature="…" length="…"
 
 cat > build/appcast.xml <<XML
@@ -45,5 +46,5 @@ XML
 
 git tag "$TAG"
 git push origin main "$TAG"
-gh release create "$TAG" "$ZIP" build/appcast.xml --repo "$REPO" --title "Terminaly $VERSION" --notes "$NOTES"
+gh release create "$TAG" "$ZIP" build/Terminaly.zip build/appcast.xml --repo "$REPO" --title "Terminaly $VERSION" --notes "$NOTES"
 echo "Released $TAG (build $BUILD)"

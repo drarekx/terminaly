@@ -29,6 +29,25 @@ tly ls · tly new --command claude · tly send <id> "text" --enter · tly logs <
 tly attach <id> (Ctrl-\ detaches) · tly wait <id> · tly kill|rm <id> · tly shutdown
 ```
 
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/drarekx/terminaly/main/install.sh | bash
+```
+
+Installs `Terminaly.app` into /Applications (or ~/Applications) and links the `tly` CLI
+(`bash -s -- --no-cli` to skip it). Later versions arrive through the built-in updater.
+
+## Release
+
+```sh
+scripts/release.sh 0.2.0 "release notes"
+```
+
+Builds, zips and EdDSA-signs the app, writes `appcast.xml`, tags, pushes and publishes the GitHub
+release (versioned zip + `Terminaly.zip` for the installer + appcast for Sparkle).
+Needs `gh` and the Sparkle private key in the login Keychain.
+
 ## Build
 
 ```sh
