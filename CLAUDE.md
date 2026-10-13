@@ -1,6 +1,6 @@
 # Terminaly
 
-App nativa de macOS para lanzar y vigilar sesiones de agentes CLI (Claude Code, Codex, shells), inspirada en Unpeel. Repo público: https://github.com/drarekx/terminaly. Mantén este archivo al día cuando cambie la arquitectura, el flujo de release o aparezca una trampa nueva.
+App nativa de macOS para lanzar y vigilar sesiones de agentes CLI (Claude Code, Codex, shells), inspirada en Unpeel. Repo público: https://github.com/drarekx/terminaly. Plan de trabajo en `ROADMAP.md`: márcalo al completar elementos. Mantén este archivo al día cuando cambie la arquitectura, el flujo de release o aparezca una trampa nueva.
 
 ## Estructura
 
