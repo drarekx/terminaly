@@ -1,85 +1,139 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Sidebar = horizontal pager with one page per workspace (swipe with two fingers),
+/// each tinted with its workspace color, plus a footer with workspace icon dots.
 struct SidebarView: View {
     @Environment(AppStore.self) private var store
-    @State private var showArchived = false
+    @State private var scrolledID: UUID?
 
     var body: some View {
-        List(selection: Binding(
-            get: { store.selectedSessionID },
-            set: { if let id = $0 { store.show(id) } }
-        )) {
-            ForEach(store.visibleProjects) { project in
-                Section {
-                    if !project.collapsed {
-                        ForEach(store.sessions(in: project)) { session in
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 0) {
+                        ForEach(store.workspaces) { ws in
+                            WorkspacePage(workspace: ws, topInset: geo.safeAreaInsets.top)
+                                .containerRelativeFrame(.horizontal)
+                                .id(ws.id)
+                        }
+                    }
+                    .scrollTargetLayout()
+                }
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $scrolledID)
+                .scrollIndicators(.never)
+                .ignoresSafeArea(edges: .vertical)
+
+                SidebarFooter()
+            }
+        }
+        .onAppear {
+            scrolledID = store.selectedWorkspaceID
+            // The pager may not be laid out yet on first appearance.
+            DispatchQueue.main.async { scrolledID = store.selectedWorkspaceID }
+        }
+        // Swipe settled on another page → switch workspace.
+        .onChange(of: scrolledID) { _, id in
+            if let id, id != store.selectedWorkspaceID { store.selectWorkspace(id) }
+        }
+        // Switched elsewhere (dots, keyboard, palette) → glide the pager there.
+        .onChange(of: store.selectedWorkspaceID) { _, id in
+            guard scrolledID != id else { return }
+            withAnimation(.smooth(duration: 0.35)) { scrolledID = id }
+        }
+        .onChange(of: store.workspaces.count) { _, _ in
+            withAnimation(.smooth(duration: 0.35)) { scrolledID = store.selectedWorkspaceID }
+        }
+    }
+}
+
+/// One workspace: tinted background, title, project list.
+private struct WorkspacePage: View {
+    @Environment(AppStore.self) private var store
+    let workspace: Workspace
+    let topInset: CGFloat
+    @State private var showArchived = false
+
+    private var projects: [Project] { store.projects(in: workspace) }
+    private var archived: [Session] {
+        let ids = Set(projects.map(\.id))
+        return store.sessions.filter { $0.archived && ids.contains($0.projectID) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            WorkspaceTitle(workspace: workspace)
+                .padding(.top, topInset + 6)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 4)
+
+            List(selection: Binding(
+                get: { store.selectedSessionID },
+                set: { if let id = $0 { store.show(id) } }
+            )) {
+                ForEach(projects) { project in
+                    Section {
+                        if !project.collapsed {
+                            ForEach(store.sessions(in: project)) { session in
+                                SessionRow(session: session)
+                                    .tag(session.id)
+                                    .contextMenu { sessionMenu(session) }
+                            }
+                            if store.sessions(in: project).isEmpty {
+                                Text("No sessions").font(.caption).foregroundStyle(.tertiary)
+                            }
+                        }
+                    } header: {
+                        ProjectHeader(project: project)
+                    }
+                }
+
+                if !archived.isEmpty {
+                    Section(isExpanded: $showArchived) {
+                        ForEach(archived) { session in
                             SessionRow(session: session)
                                 .tag(session.id)
-                                .contextMenu { sessionMenu(session) }
+                                .contextMenu {
+                                    Button("Restore") { store.show(session.id) }
+                                    Button("Delete", role: .destructive) { store.deleteSession(session.id) }
+                                }
                         }
-                        if store.sessions(in: project).isEmpty {
-                            Text("No sessions").font(.caption).foregroundStyle(.tertiary)
-                        }
+                    } header: {
+                        Text("Archived (\(archived.count))")
                     }
-                } header: {
-                    ProjectHeader(project: project)
                 }
+                // Room so the last rows can scroll above the footer.
+                Color.clear.frame(height: 56).listRowSeparator(.hidden)
             }
-
-            if !store.archivedSessions.isEmpty {
-                Section(isExpanded: $showArchived) {
-                    ForEach(store.archivedSessions) { session in
-                        SessionRow(session: session)
-                            .tag(session.id)
-                            .contextMenu {
-                                Button("Restore") { store.show(session.id) }
-                                Button("Delete", role: .destructive) { store.deleteSession(session.id) }
-                            }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .tint(workspace.color.color)
+            .overlay {
+                if projects.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Projects", systemImage: "folder.badge.plus")
+                    } description: {
+                        Text("Add a folder or drop one here. Drag a project onto a workspace icon below to move it.")
+                    } actions: {
+                        Button("Add Project…") { store.addProjectWithPanel() }
                     }
-                } header: {
-                    Text("Archived (\(store.archivedSessions.count))")
+                    .padding(.bottom, 56)
                 }
             }
         }
-        .listStyle(.sidebar)
-        .overlay {
-            if store.visibleProjects.isEmpty {
-                ContentUnavailableView {
-                    Label("No Projects", systemImage: "folder.badge.plus")
-                } description: {
-                    Text("Add a folder to \(store.currentWorkspace?.name ?? "this workspace"), drop one here, or drag a project onto a workspace above.")
-                } actions: {
-                    Button("Add Project…") { store.addProjectWithPanel() }
-                }
-            }
-        }
+        .background { WorkspaceTint(color: workspace.color.color) }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     guard let url, url.hasDirectoryPath else { return }
                     DispatchQueue.main.async {
                         let p = store.addProject(at: url)
-                        if let ws = store.selectedWorkspaceID { store.moveProject(p.id, to: ws) }
+                        store.moveProject(p.id, to: workspace.id)
                     }
                 }
             }
             return true
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            WorkspaceBar()
-        }
-        .safeAreaInset(edge: .bottom) {
-            HStack {
-                Button { store.addProjectWithPanel() } label: {
-                    Label("Add Project", systemImage: "folder.badge.plus")
-                }
-                .buttonStyle(.borderless)
-                Spacer()
-                SettingsLink { Image(systemName: "gearshape") }
-                    .buttonStyle(.borderless)
-            }
-            .padding(10)
         }
     }
 
@@ -99,6 +153,16 @@ struct SidebarView: View {
     }
 }
 
+/// Workspace color wash over the sidebar material: strong at the top, fading down.
+struct WorkspaceTint: View {
+    let color: Color
+
+    var body: some View {
+        LinearGradient(colors: [color.opacity(0.42), color.opacity(0.22), color.opacity(0.14)],
+                       startPoint: .top, endPoint: .bottom)
+    }
+}
+
 private struct ProjectHeader: View {
     @Environment(AppStore.self) private var store
     let project: Project
@@ -109,8 +173,15 @@ private struct ProjectHeader: View {
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(.tertiary)
                 .frame(width: 10)
-            Image(systemName: "folder.fill")
-                .foregroundStyle(project.color.color)
+            // Colored badge: plain symbol tints get overridden in sidebar section headers.
+            RoundedRectangle(cornerRadius: 4)
+                .fill(project.color.color.gradient)
+                .frame(width: 16, height: 16)
+                .overlay {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white)
+                }
             Text(project.name)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.primary)

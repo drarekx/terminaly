@@ -81,7 +81,7 @@ enum SessionStatus: String, Codable {
         case .working: .blue
         case .idle: .green
         case .needsInput: .orange
-        case .exited: .secondary
+        case .exited: Color(white: 0.55)
         }
     }
 }

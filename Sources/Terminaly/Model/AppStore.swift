@@ -25,6 +25,11 @@ final class AppStore {
 
     private init() {
         load()
+        if workspaces.isEmpty {  // fresh install: no state file yet
+            let ws = Workspace(name: "Personal", symbol: "house.fill")
+            workspaces = [ws]
+            selectedWorkspaceID = ws.id
+        }
         terminals.store = self
     }
 

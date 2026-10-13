@@ -110,6 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             MainActor.assumeIsolated { SelfTest.run() }
             return
         }
+        MainActor.assumeIsolated { Snapshot.runIfRequested() }
         if Notifier.available {
             UNUserNotificationCenter.current().delegate = self
             Notifier.requestAuthorization()

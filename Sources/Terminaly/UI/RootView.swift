@@ -12,6 +12,7 @@ struct RootView: View {
         } detail: {
             PaneTreeView(node: store.layout)
                 .background(Color(nsColor: NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.09, alpha: 1)))
+                .environment(\.colorScheme, .dark)  // terminal area is always dark
                 .toolbar { toolbar }
         }
         .overlay {
