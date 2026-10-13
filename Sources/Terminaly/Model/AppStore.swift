@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import SwiftUI
 import TerminalyKit
 
 @MainActor
@@ -19,6 +20,8 @@ final class AppStore {
     var showPalette = false
     var renamingSessionID: UUID?
     var renamingWorkspaceID: UUID?
+    /// Pane shown alone (⌘↩); runtime only.
+    var zoomedLeafID: UUID?
 
     @ObservationIgnored let terminals = TerminalRegistry()
     @ObservationIgnored private var saveTask: Task<Void, Never>?
@@ -254,9 +257,44 @@ final class AppStore {
         scheduleSave()
     }
 
+    func toggleZoom(_ leaf: UUID? = nil) {
+        if zoomedLeafID != nil {
+            zoomedLeafID = nil
+        } else if layout.leafIDs.count > 1, let target = leaf ?? focusedLeafID {
+            zoomedLeafID = target
+            focus(leaf: target)
+        }
+    }
+
+    /// Drops a session onto a pane: `edge` nil replaces the pane's session, otherwise the pane
+    /// splits and the session opens on that side.
+    func place(_ sessionID: UUID, in leaf: UUID, edge: Edge?) {
+        guard session(sessionID) != nil, layout.leafIDs.contains(leaf) else { return }
+        if edge == nil && layout.sessionID(inLeaf: leaf) == sessionID { return }
+        layout = layout.clearing(sessionID)
+        zoomedLeafID = nil
+        if let edge {
+            let fresh = PaneNode.leaf(id: UUID(), sessionID: sessionID)
+            let axis: SplitAxis = (edge == .leading || edge == .trailing) ? .horizontal : .vertical
+            let first = edge == .leading || edge == .top
+            layout = layout.mapLeaf(leaf) { old in
+                .split(id: UUID(), axis: axis, children: first ? [fresh, old] : [old, fresh])
+            }
+            focusedLeafID = fresh.id
+        } else {
+            layout = layout.mapLeaf(leaf) { _ in .leaf(id: leaf, sessionID: sessionID) }
+            focusedLeafID = leaf
+        }
+        selectedSessionID = sessionID
+        update(sessionID) { $0.unread = false }
+        terminals.focus(sessionID)
+        scheduleSave()
+    }
+
     func closePane(_ leaf: UUID? = nil) {
         guard let target = leaf ?? focusedLeafID else { return }
         layout = layout.removing(target) ?? .empty()
+        if zoomedLeafID == target || layout.leafIDs.count < 2 { zoomedLeafID = nil }
         focusedLeafID = layout.leafIDs.first
         if let f = focusedLeafID { focus(leaf: f) }
         scheduleSave()
@@ -381,6 +419,7 @@ extension AppStore {
         guard id != selectedWorkspaceID, let ws = workspaces.first(where: { $0.id == id }) else { return }
         commitLayout()
         selectedWorkspaceID = id
+        zoomedLeafID = nil
         layout = ws.layout
         focusedLeafID = layout.leafIDs.first { layout.sessionID(inLeaf: $0) != nil } ?? layout.leafIDs.first
         selectedSessionID = focusedLeafID.flatMap { layout.sessionID(inLeaf: $0) }

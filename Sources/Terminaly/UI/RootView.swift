@@ -10,8 +10,16 @@ struct RootView: View {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 380)
         } detail: {
-            PaneTreeView(node: store.layout)
-                .padding(6)
+            Group {
+                if let zoomed = store.zoomedLeafID, store.layout.leafIDs.contains(zoomed) {
+                    PaneView(leafID: zoomed, sessionID: store.layout.sessionID(inLeaf: zoomed))
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                } else {
+                    PaneTreeView(node: store.layout)
+                }
+            }
+            .animation(.smooth(duration: 0.22), value: store.zoomedLeafID)
+            .padding(6)
                 .background(Theme.ground)
                 .toolbar { toolbar }
         }

@@ -285,6 +285,13 @@ private struct SidebarSessionRow: View {
             .contentShape(RoundedRectangle(cornerRadius: 9))
             .onHover { hovering = $0 }
             .onTapGesture { store.show(session.id) }
+            .draggable("session:\(session.id.uuidString)") {
+                Label(session.title, systemImage: session.symbol)
+                    .font(Theme.Font.bodyMedium)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.elevated))
+            }
             .accessibilityAddTraits(.isButton)
             .accessibilityAddTraits(selected ? .isSelected : [])
     }

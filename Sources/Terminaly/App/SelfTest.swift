@@ -60,6 +60,22 @@ enum SelfTest {
         print("3 relaunch: alive=\(alive) replayed=\(reattached)")
         guard alive && reattached else { return finish(false, "relaunch") }
 
+        // 4. Drag-to-pane placement and zoom
+        _ = store.addWorkspace(name: "Panes")
+        let root = store.layout.leafIDs[0]
+        store.place(b.id, in: root, edge: nil)                 // center: show b
+        let centered = store.layout.sessionIDs == [b.id]
+        store.place(a.id, in: root, edge: .trailing)           // edge: split, a on the right
+        let split = store.layout.leafIDs.count == 2 && store.layout.sessionIDs == [b.id, a.id]
+        store.toggleZoom()
+        let zoomedOK = store.zoomedLeafID == store.focusedLeafID && store.zoomedLeafID != nil
+        store.toggleZoom()
+        let right = store.layout.leafIDs[1]
+        store.place(b.id, in: right, edge: nil)                // move b: leaves its old pane
+        let moved = store.layout.sessionIDs == [b.id] && store.layout.leafIDs.count == 2
+        print("4 panes: centered=\(centered) split=\(split) zoom=\(zoomedOK) moved=\(moved)")
+        guard centered && split && zoomedOK && moved else { return finish(false, "panes") }
+
         finish(true, "")
     }
 

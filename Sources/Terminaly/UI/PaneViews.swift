@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Renders the split tree recursively.
 struct PaneTreeView: View {
@@ -30,12 +31,16 @@ struct PaneView: View {
     let sessionID: UUID?
     @State private var hovering = false
 
+    @State private var dropEdge: Edge?? = nil   // nil: not targeted; .some(nil): center
+    @State private var size: CGSize = .zero
+
     private var isFocused: Bool { store.focusedLeafID == leafID }
     private var multiPane: Bool { store.layout.leafIDs.count > 1 }
+    private var zoomed: Bool { store.zoomedLeafID == leafID }
 
     var body: some View {
         VStack(spacing: 0) {
-            if multiPane || sessionID != nil {
+            if multiPane || zoomed || sessionID != nil {
                 header
             }
             content
@@ -47,9 +52,13 @@ struct PaneView: View {
                 .strokeBorder(isFocused && multiPane ? Theme.ring(store.accent) : Color.white.opacity(0.06), lineWidth: 1)
                 .allowsHitTesting(false)
         }
+        .overlay { DropZoneHighlight(edge: dropEdge, accent: store.accent.color) }
         .padding(3)
         .frame(minWidth: 220, minHeight: 120)
+        .background(GeometryReader { g in Color.clear.onAppear { size = g.size }.onChange(of: g.size) { _, s in size = s } })
+        .onDrop(of: [.utf8PlainText], delegate: SessionDropDelegate(leafID: leafID, size: { size }, edge: $dropEdge, store: store))
         .animation(.easeOut(duration: 0.15), value: isFocused)
+        .animation(.easeOut(duration: 0.12), value: dropEdge)
     }
 
     private var header: some View {
@@ -83,6 +92,13 @@ struct PaneView: View {
                 Button { store.split(.vertical, leaf: leafID) } label: { Image(systemName: "rectangle.split.1x2") }
                     .help("Split Down")
                     .accessibilityLabel("Split Down")
+                if multiPane || zoomed {
+                    Button { store.toggleZoom(leafID) } label: {
+                        Image(systemName: zoomed ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                    }
+                    .help(zoomed ? "Unzoom (⌘↩)" : "Zoom Pane (⌘↩)")
+                    .accessibilityLabel(zoomed ? "Unzoom" : "Zoom Pane")
+                }
                 if multiPane {
                     Button { store.closePane(leafID) } label: { Image(systemName: "xmark") }
                         .help("Close Pane (⌘W)")
@@ -276,5 +292,76 @@ private struct PresetCard: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+/// Where a dragged session would land: center replaces, an edge splits that way.
+private struct SessionDropDelegate: DropDelegate {
+    let leafID: UUID
+    let size: () -> CGSize
+    @Binding var edge: Edge??
+    let store: AppStore
+
+    static func zone(_ p: CGPoint, in size: CGSize) -> Edge? {
+        guard size.width > 0, size.height > 0 else { return nil }
+        let x = p.x / size.width, y = p.y / size.height
+        let margins: [(Edge, CGFloat)] = [(.leading, x), (.trailing, 1 - x), (.top, y), (.bottom, 1 - y)]
+        guard let nearest = margins.min(by: { $0.1 < $1.1 }), nearest.1 < 0.25 else { return nil }
+        return nearest.0
+    }
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.utf8PlainText]) }
+
+    func dropEntered(info: DropInfo) { edge = .some(Self.zone(info.location, in: size())) }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        edge = .some(Self.zone(info.location, in: size()))
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) { edge = nil }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let target = Self.zone(info.location, in: size())
+        edge = nil
+        guard let provider = info.itemProviders(for: [.utf8PlainText]).first else { return false }
+        let leaf = leafID
+        _ = provider.loadObject(ofClass: String.self) { value, _ in
+            guard let value, value.hasPrefix("session:"), let id = UUID(uuidString: String(value.dropFirst(8))) else { return }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { store.place(id, in: leaf, edge: target) }
+            }
+        }
+        return true
+    }
+}
+
+/// Accent-colored preview of the drop target: the whole pane or the half it would split into.
+private struct DropZoneHighlight: View {
+    let edge: Edge??
+    let accent: Color
+
+    var body: some View {
+        GeometryReader { g in
+            if let target = edge {
+                let rect = Self.rect(for: target, in: g.size)
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(accent.opacity(0.18))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(accent, lineWidth: 2))
+                    .frame(width: rect.width, height: rect.height)
+                    .offset(x: rect.minX, y: rect.minY)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    static func rect(for edge: Edge?, in s: CGSize) -> CGRect {
+        switch edge {
+        case nil: CGRect(origin: .zero, size: s)
+        case .leading: CGRect(x: 0, y: 0, width: s.width / 2, height: s.height)
+        case .trailing: CGRect(x: s.width / 2, y: 0, width: s.width / 2, height: s.height)
+        case .top: CGRect(x: 0, y: 0, width: s.width, height: s.height / 2)
+        case .bottom: CGRect(x: 0, y: s.height / 2, width: s.width, height: s.height / 2)
+        }
     }
 }

@@ -89,6 +89,9 @@ struct AppCommands: Commands {
                 .keyboardShortcut("d")
             Button("Split Down") { store.split(.vertical) }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
+            Button(store.zoomedLeafID == nil ? "Zoom Pane" : "Unzoom Pane") { store.toggleZoom() }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(store.layout.leafIDs.count < 2)
             Button("Close Pane") { store.closePane() }
                 .keyboardShortcut("w")
         }
