@@ -69,6 +69,21 @@ struct AppCommands: Commands {
             Divider()
             Button("Stop All Sessions…") { store.confirmStopAll() }
         }
+        CommandMenu("Workspace") {
+            Button("New Workspace") { store.addWorkspace() }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+            Button("Rename Workspace…") { store.renamingWorkspaceID = store.selectedWorkspaceID }
+            Divider()
+            Button("Next Workspace") { store.cycleWorkspace(by: 1) }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+            Button("Previous Workspace") { store.cycleWorkspace(by: -1) }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+            Divider()
+            ForEach(Array(store.workspaces.prefix(9).enumerated()), id: \.element.id) { i, ws in
+                Button(ws.name) { store.selectWorkspace(at: i) }
+                    .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: [.command, .option])
+            }
+        }
         CommandMenu("Pane") {
             Button("Split Right") { store.split(.horizontal) }
                 .keyboardShortcut("d")

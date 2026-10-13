@@ -16,12 +16,17 @@ struct CommandPaletteView: View {
 
     private var items: [Item] {
         var all: [Item] = []
+        for ws in store.workspaces where ws.id != store.selectedWorkspaceID {
+            all.append(Item(id: "w\(ws.id)", title: "Go to \(ws.name)", subtitle: "Workspace",
+                            symbol: ws.symbol) { store.selectWorkspace(ws.id) })
+        }
         for s in store.sessions where !s.archived {
             let project = store.project(s.projectID)?.name ?? ""
-            all.append(Item(id: "s\(s.id)", title: s.title, subtitle: "\(project) · \(s.status.label)",
+            let ws = store.workspace(of: s.id).map { "\($0.name) › " } ?? ""
+            all.append(Item(id: "s\(s.id)", title: s.title, subtitle: "\(ws)\(project) · \(s.status.label)",
                             symbol: s.symbol) { store.show(s.id) })
         }
-        for p in store.projects {
+        for p in store.visibleProjects {
             for preset in store.presets {
                 all.append(Item(id: "n\(p.id)\(preset.id)", title: "New \(preset.label)", subtitle: p.name,
                                 symbol: "plus") { store.newSession(preset: preset, in: p) })
@@ -29,6 +34,7 @@ struct CommandPaletteView: View {
         }
         all.append(Item(id: "split-h", title: "Split Right", subtitle: "Pane", symbol: "rectangle.split.2x1") { store.split(.horizontal) })
         all.append(Item(id: "split-v", title: "Split Down", subtitle: "Pane", symbol: "rectangle.split.1x2") { store.split(.vertical) })
+        all.append(Item(id: "new-ws", title: "New Workspace", subtitle: "Workspace", symbol: "plus.rectangle.on.rectangle") { store.addWorkspace() })
         all.append(Item(id: "add", title: "Add Project…", subtitle: "Project", symbol: "folder.badge.plus") { store.addProjectWithPanel() })
         for s in store.archivedSessions {
             all.append(Item(id: "a\(s.id)", title: "Restore \(s.title)", subtitle: "Archived",

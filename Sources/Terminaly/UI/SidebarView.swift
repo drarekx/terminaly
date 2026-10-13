@@ -10,7 +10,7 @@ struct SidebarView: View {
             get: { store.selectedSessionID },
             set: { if let id = $0 { store.show(id) } }
         )) {
-            ForEach(store.projects) { project in
+            ForEach(store.visibleProjects) { project in
                 Section {
                     if !project.collapsed {
                         ForEach(store.sessions(in: project)) { session in
@@ -44,11 +44,11 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .overlay {
-            if store.projects.isEmpty {
+            if store.visibleProjects.isEmpty {
                 ContentUnavailableView {
                     Label("No Projects", systemImage: "folder.badge.plus")
                 } description: {
-                    Text("Add a folder or drop one here.")
+                    Text("Add a folder to \(store.currentWorkspace?.name ?? "this workspace"), drop one here, or drag a project onto a workspace above.")
                 } actions: {
                     Button("Add Project…") { store.addProjectWithPanel() }
                 }
@@ -58,10 +58,16 @@ struct SidebarView: View {
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     guard let url, url.hasDirectoryPath else { return }
-                    DispatchQueue.main.async { store.addProject(at: url) }
+                    DispatchQueue.main.async {
+                        let p = store.addProject(at: url)
+                        if let ws = store.selectedWorkspaceID { store.moveProject(p.id, to: ws) }
+                    }
                 }
             }
             return true
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            WorkspaceBar()
         }
         .safeAreaInset(edge: .bottom) {
             HStack {
@@ -124,7 +130,21 @@ private struct ProjectHeader: View {
         .contentShape(Rectangle())
         .onTapGesture { store.toggleCollapsed(project) }
         .help(project.path)
+        .draggable("project:\(project.id.uuidString)") {
+            Label(project.name, systemImage: "folder.fill")
+                .padding(6)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+        }
         .contextMenu {
+            if store.workspaces.count > 1 {
+                Menu("Move to Workspace") {
+                    ForEach(store.workspaces.filter { $0.id != project.workspaceID }) { ws in
+                        Button { store.moveProject(project.id, to: ws.id) } label: {
+                            Label(ws.name, systemImage: ws.symbol)
+                        }
+                    }
+                }
+            }
             Menu("Color") {
                 ForEach(FolderColor.allCases, id: \.self) { c in
                     Button(c.rawValue.capitalized) { store.setColor(c, for: project) }

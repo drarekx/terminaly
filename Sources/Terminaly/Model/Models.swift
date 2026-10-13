@@ -1,12 +1,29 @@
 import Foundation
 import SwiftUI
 
+/// Named group of projects with its own pane layout.
+struct Workspace: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var name: String
+    var symbol: String = "square.stack.3d.up.fill"
+    var color: FolderColor = .blue
+    var layout: PaneNode = .empty()
+
+    static let symbols = [
+        "square.stack.3d.up.fill", "briefcase.fill", "house.fill", "hammer.fill", "flask.fill",
+        "graduationcap.fill", "gamecontroller.fill", "paintbrush.fill", "leaf.fill", "bolt.fill",
+        "star.fill", "heart.fill", "globe", "server.rack", "cpu", "book.fill",
+    ]
+}
+
 struct Project: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
     var path: String
     var color: FolderColor = .blue
     var collapsed = false
+    /// nil only in state files written before workspaces existed; fixed on load.
+    var workspaceID: UUID?
 }
 
 enum FolderColor: String, Codable, CaseIterable {
@@ -173,6 +190,10 @@ struct PersistedState: Codable {
     var projects: [Project] = []
     var sessions: [Session] = []
     var presets: [Preset] = Preset.defaults
+    /// Layout before workspaces existed; migrated into the first workspace.
     var layout: PaneNode = .empty()
     var selectedSessionID: UUID?
+    // Optional so older state files still decode.
+    var workspaces: [Workspace]?
+    var selectedWorkspaceID: UUID?
 }

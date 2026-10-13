@@ -23,7 +23,11 @@ enum SelfTest {
     }
 
     private static func steps(_ store: AppStore) async {
+        // 0. Workspaces: legacy migration (when seeded), per-workspace layouts, moving projects.
+        if !workspaceChecks(store) { return }
+
         let project = store.addProject(at: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+        if let ws = store.selectedWorkspaceID { store.moveProject(project.id, to: ws) }
 
         // 1. Hook path
         let hook = ClaudeHookInstaller.command(for: "Notification")
@@ -57,6 +61,38 @@ enum SelfTest {
         guard alive && reattached else { return finish(false, "relaunch") }
 
         finish(true, "")
+    }
+
+    private static func workspaceChecks(_ store: AppStore) -> Bool {
+        if let legacy = ProcessInfo.processInfo.environment["SELFTEST_EXPECT_LEGACY_PROJECTS"] {
+            let migrated = store.workspaces.count == 1 && store.workspaces[0].name == "Personal"
+                && store.projects.count == Int(legacy)
+                && store.projects.allSatisfy { $0.workspaceID == store.workspaces[0].id }
+            print("0 migration: workspaces=\(store.workspaces.map(\.name)) projects=\(store.projects.count) ok=\(migrated)")
+            guard migrated else { finish(false, "migration"); return false }
+        }
+        let home = store.selectedWorkspaceID!
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        let p = store.addProject(at: tmp)
+        store.split(.horizontal)                      // home layout: 2 panes
+        let homeLeaves = store.layout.leafIDs.count
+        let work = store.addWorkspace(name: "Work")    // switches; fresh layout
+        let freshLayout = store.layout.leafIDs.count == 1
+        store.moveProject(p.id, to: work.id)
+        let moved = store.visibleProjects.contains { $0.id == p.id }
+        store.selectWorkspace(home)
+        let restored = store.layout.leafIDs.count == homeLeaves && homeLeaves == 2
+        let gone = !store.visibleProjects.contains { $0.id == p.id }
+        store.renameWorkspace(work.id, to: "  Trabajo  ")
+        let renamed = store.workspaces.first { $0.id == work.id }?.name == "Trabajo"
+        store.closePane()
+        store.deleteWorkspace(work.id)
+        let heir = store.project(p.id)?.workspaceID == home && store.workspaces.count >= 1
+        let ok = freshLayout && moved && restored && gone && renamed && heir
+        print("0 workspaces: fresh=\(freshLayout) moved=\(moved) restored=\(restored) hidden=\(gone) renamed=\(renamed) heir=\(heir)")
+        store.removeProject(store.project(p.id)!)
+        if !ok { finish(false, "workspaces") }
+        return ok
     }
 
     private static func finish(_ ok: Bool, _ msg: String) {
