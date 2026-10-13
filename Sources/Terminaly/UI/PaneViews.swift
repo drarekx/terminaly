@@ -57,42 +57,44 @@ struct PaneView: View {
             if let s = store.session(sessionID) {
                 StatusDot(status: s.status)
                 Text(s.title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.text.opacity(isFocused ? 1 : 0.8))
+                    .font(Theme.Font.bodyStrong)
+                    .foregroundStyle(Theme.text.opacity(isFocused ? 1 : 0.82))
                     .lineLimit(1)
                 if let p = store.project(s.projectID) {
-                    Text(p.name).font(.system(size: 12)).foregroundStyle(Theme.text.opacity(0.5)).lineLimit(1)
+                    Text(p.name).font(Theme.Font.body).foregroundStyle(Theme.tertiaryText).lineLimit(1)
                 }
                 Spacer()
                 if s.status == .needsInput {
                     Text("Needs input")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(Theme.Font.label)
                         .foregroundStyle(s.status.text)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
                         .background(RoundedRectangle(cornerRadius: 5).fill(s.status.dot.opacity(0.14)))
                 }
             } else {
-                Text("Empty pane").font(.system(size: 12)).foregroundStyle(Theme.text.opacity(0.5))
+                Text("Empty pane").font(Theme.Font.body).foregroundStyle(Theme.tertiaryText)
                 Spacer()
             }
             Group {
                 Button { store.split(.horizontal, leaf: leafID) } label: { Image(systemName: "rectangle.split.2x1") }
                     .help("Split Right")
+                    .accessibilityLabel("Split Right")
                 Button { store.split(.vertical, leaf: leafID) } label: { Image(systemName: "rectangle.split.1x2") }
                     .help("Split Down")
+                    .accessibilityLabel("Split Down")
                 if multiPane {
                     Button { store.closePane(leafID) } label: { Image(systemName: "xmark") }
-                        .help("Close Pane")
+                        .help("Close Pane (⌘W)")
+                        .accessibilityLabel("Close Pane")
                 }
             }
+            .buttonStyle(IconButtonStyle(size: 26))
             .opacity(hovering || isFocused ? 1 : 0)
         }
-        .buttonStyle(.borderless)
-        .font(.system(size: 11))
-        .foregroundStyle(Theme.text.opacity(0.75))
-        .padding(.horizontal, 10)
-        .frame(height: 32)
+        .padding(.leading, 12)
+        .padding(.trailing, 4)
+        .frame(height: 36)
         .background(Color.white.opacity(isFocused ? 0.035 : 0.02))
         .overlay(alignment: .bottom) { Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1) }
         .contentShape(Rectangle())
@@ -167,16 +169,21 @@ private struct ExitedBar: View {
     let session: Session
 
     var body: some View {
-        HStack {
-            Image(systemName: "stop.circle")
+        HStack(spacing: 10) {
+            Image(systemName: "stop.circle").foregroundStyle(Theme.secondaryText)
             Text("Process exited" + (session.exitCode.map { " with code \($0)" } ?? ""))
+                .font(Theme.Font.body)
+                .foregroundStyle(Theme.text)
             Spacer()
-            Button("Restart") { store.restart(session.id) }
             Button("Archive") { store.archive(session.id) }
+                .buttonStyle(SecondaryButtonStyle(compact: true))
+            Button("Restart") { store.restart(session.id) }
+                .buttonStyle(PrimaryButtonStyle(compact: true))
         }
-        .font(.system(size: 12))
-        .padding(8)
-        .background(.regularMaterial)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Theme.elevated)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
     }
 }
 
@@ -185,13 +192,20 @@ private struct DeadSessionView: View {
     let session: Session
 
     var body: some View {
-        ContentUnavailableView {
-            Label(session.title, systemImage: session.symbol)
-        } description: {
-            Text(session.command.isEmpty ? "Shell session is not running." : "`\(session.command)` is not running.")
-        } actions: {
-            Button("Start") { store.restart(session.id) }
-                .keyboardShortcut(.defaultAction)
+        VStack(spacing: 12) {
+            Image(systemName: session.symbol)
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(Theme.tertiaryText)
+            Text(session.title).font(Theme.Font.title).foregroundStyle(Theme.text)
+            Text(session.command.isEmpty ? "Shell session is not running." : "\(session.command) is not running.")
+                .font(Theme.Font.body)
+                .foregroundStyle(Theme.secondaryText)
+            Button { store.restart(session.id) } label: {
+                Label("Start", systemImage: "play.fill")
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .keyboardShortcut(.defaultAction)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -217,12 +231,11 @@ private struct EmptyPaneView: View {
                 }
                 .frame(maxWidth: 540)
                 Text("⌘T new · ⌘K palette · ⌘D split")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.text.opacity(0.5))
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.tertiaryText)
             } else {
                 Button("Add Project…") { store.addProjectWithPanel() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .buttonStyle(PrimaryButtonStyle())
             }
         }
         .padding(24)
@@ -249,8 +262,8 @@ private struct PresetCard: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
                 Text(preset.command.isEmpty ? "login shell" : preset.command)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(Theme.text.opacity(0.5))
+                    .font(Theme.Font.mono)
+                    .foregroundStyle(Theme.tertiaryText)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -84,14 +84,14 @@ struct CommandPaletteView: View {
                                             .frame(width: 18)
                                     }
                                     Text(item.title)
-                                        .font(.system(size: 13, weight: i == index ? .semibold : .regular))
+                                        .font(i == index ? Theme.Font.bodyStrong : Theme.Font.body)
                                     Spacer()
                                     Text(item.subtitle)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(Theme.text.opacity(0.6))
+                                        .font(Theme.Font.caption)
+                                        .foregroundStyle(Theme.secondaryText)
                                 }
                                 .padding(.horizontal, 10)
-                                .padding(.vertical, 9)
+                                .frame(minHeight: 36)
                                 .background(RoundedRectangle(cornerRadius: 8)
                                     .fill(i == index ? store.accent.color.opacity(0.22) : .clear))
                                 .contentShape(Rectangle())

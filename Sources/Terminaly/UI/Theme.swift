@@ -81,3 +81,109 @@ extension SessionStatus {
         }
     }
 }
+
+// MARK: Type scale & text levels
+
+extension Theme {
+    /// The only sizes the UI uses. 12 pt is the floor for anything people need to read.
+    enum Font {
+        static let title = SwiftUI.Font.system(size: 17, weight: .bold)
+        static let body = SwiftUI.Font.system(size: 13)
+        static let bodyMedium = SwiftUI.Font.system(size: 13, weight: .medium)
+        static let bodyStrong = SwiftUI.Font.system(size: 13, weight: .semibold)
+        static let label = SwiftUI.Font.system(size: 12, weight: .medium)
+        static let caption = SwiftUI.Font.system(size: 12)
+        static let mono = SwiftUI.Font.system(size: 12, design: .monospaced)
+    }
+
+    static let secondaryText = text.opacity(0.72)   // ≥ 7:1 on graphite
+    static let tertiaryText = text.opacity(0.56)    // ≥ 4.5:1 on graphite and tinted sidebars
+}
+
+// MARK: Workspace accent
+
+extension EnvironmentValues {
+    /// Selected workspace color. `Color.accentColor` ignores `.tint`, so styles read this instead.
+    @Entry var workspaceAccent: Color = FolderColor.blue.color
+}
+
+// MARK: Buttons
+
+/// Filled with the workspace color: the one main action in a place.
+struct PrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.workspaceAccent) private var accent
+    var compact = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        Hover { hovering in
+            configuration.label
+                .font(Theme.Font.bodyStrong)
+                .foregroundStyle(.white)
+                .padding(.horizontal, compact ? 10 : 14)
+                .frame(minHeight: compact ? 28 : 32)
+                .background(RoundedRectangle(cornerRadius: 8).fill(accent))
+                .overlay(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(configuration.isPressed ? 0.0 : hovering ? 0.12 : 0)))
+                .overlay(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(configuration.isPressed ? 0.15 : 0)))
+                .opacity(enabled ? 1 : 0.45)
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .animation(.easeOut(duration: 0.12), value: hovering)
+                .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+        }
+    }
+}
+
+/// Quiet bordered button for secondary actions.
+struct SecondaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+    var compact = false
+    var destructive = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        Hover { hovering in
+            configuration.label
+                .font(Theme.Font.bodyMedium)
+                .foregroundStyle(destructive ? Color(hex: 0xFF6B6B) : Theme.text)
+                .padding(.horizontal, compact ? 10 : 14)
+                .frame(minHeight: compact ? 28 : 32)
+                .background(RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.16 : hovering ? 0.12 : 0.07)))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
+                .opacity(enabled ? 1 : 0.45)
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .animation(.easeOut(duration: 0.12), value: hovering)
+                .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+        }
+    }
+}
+
+/// Square icon button with a visible hover plate. Pair with `.help()` for its name.
+struct IconButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+    var size: CGFloat = 30
+    var filled = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        Hover { hovering in
+            configuration.label
+                .font(.system(size: size >= 30 ? 14 : 13, weight: .semibold))
+                .foregroundStyle(Theme.text.opacity(hovering || configuration.isPressed ? 1 : 0.8))
+                .frame(width: size, height: size)
+                .background(RoundedRectangle(cornerRadius: size * 0.26)
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.16 : hovering ? 0.10 : filled ? 0.06 : 0)))
+                .contentShape(RoundedRectangle(cornerRadius: size * 0.26))
+                .opacity(enabled ? 1 : 0.4)
+                .animation(.easeOut(duration: 0.12), value: hovering)
+        }
+    }
+}
+
+/// Tracks hover for button styles (ButtonStyle has no hover state of its own).
+struct Hover<Content: View>: View {
+    @State private var hovering = false
+    @ViewBuilder let content: (Bool) -> Content
+
+    var body: some View {
+        content(hovering).onHover { hovering = $0 }
+    }
+}

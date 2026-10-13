@@ -79,7 +79,10 @@ private struct WorkspacePage: View {
                                     .contextMenu { sessionMenu(session) }
                             }
                             if store.sessions(in: project).isEmpty {
-                                Text("No sessions").font(.caption).foregroundStyle(.tertiary)
+                                Text("No sessions")
+                                    .font(Theme.Font.caption)
+                                    .foregroundStyle(Theme.tertiaryText)
+                                    .listRowBackground(Color.clear)
                             }
                         }
                     } header: {
@@ -98,6 +101,8 @@ private struct WorkspacePage: View {
                         }
                     } header: {
                         Text("Archived (\(archived.count))")
+                            .font(Theme.Font.label)
+                            .foregroundStyle(Theme.secondaryText)
                     }
                 }
                 // Room so the last rows can scroll above the footer.
@@ -114,6 +119,7 @@ private struct WorkspacePage: View {
                         Text("Add a folder or drop one here. Drag a project onto a workspace icon below to move it.")
                     } actions: {
                         Button("Add Project…") { store.addProjectWithPanel() }
+                            .buttonStyle(PrimaryButtonStyle())
                     }
                     .padding(.bottom, 56)
                 }
@@ -135,19 +141,9 @@ private struct WorkspacePage: View {
     }
 
     private func selectableRow(_ session: Session) -> some View {
-        let selected = store.selectedSessionID == session.id
-        return SessionRow(session: session)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: 9).fill(Color.white.opacity(selected ? 0.10 : 0)))
-            .overlay(RoundedRectangle(cornerRadius: 9)
-                .strokeBorder(selected ? Theme.ring(workspace.color) : .clear, lineWidth: 1))
-            .contentShape(RoundedRectangle(cornerRadius: 9))
-            .onTapGesture { store.show(session.id) }
+        SidebarSessionRow(session: session, workspace: workspace)
             .listRowInsets(EdgeInsets(top: 1, leading: 4, bottom: 1, trailing: 4))
             .listRowBackground(Color.clear)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -170,13 +166,14 @@ private struct WorkspacePage: View {
 private struct ProjectHeader: View {
     @Environment(AppStore.self) private var store
     let project: Project
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: project.collapsed ? "chevron.right" : "chevron.down")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.tertiary)
-                .frame(width: 10)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(Theme.tertiaryText)
+                .frame(width: 12)
             // Colored letter badge: plain symbol tints get overridden in sidebar section headers.
             RoundedRectangle(cornerRadius: 5)
                 .fill(project.color.color)
@@ -187,29 +184,43 @@ private struct ProjectHeader: View {
                         .foregroundStyle(.white)
                 }
             Text(project.name.uppercased())
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(0.6)
-                .foregroundStyle(Theme.text.opacity(0.72))
+                .font(.system(size: 12, weight: .semibold))
+                .tracking(0.5)
+                .foregroundStyle(Theme.secondaryText)
                 .lineLimit(1)
             Spacer()
             let count = store.sessions(in: project).count
-            if count > 0 {
+            if count > 0 && !hovering {
                 Text("\(count)")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.text.opacity(0.45))
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.tertiaryText)
             }
-            Menu {
-                ForEach(store.presets) { preset in
-                    Button(preset.label) { store.newSession(preset: preset, in: project) }
+            if hovering {
+                PopoverMenuButton(width: 270) {
+                    Image(systemName: "ellipsis")
+                } content: {
+                    ProjectMenu(project: project)
                 }
-            } label: {
-                Image(systemName: "plus")
+                .buttonStyle(IconButtonStyle(size: 24))
+                .help("Project options")
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
+            PopoverMenuButton(width: 280) {
+                Image(systemName: "plus")
+            } content: {
+                MenuSectionLabel(title: "New session in \(project.name)")
+                ForEach(store.presets) { preset in
+                    MenuRow(title: preset.label, icon: preset.symbol,
+                            subtitle: preset.command.isEmpty ? "login shell" : preset.command) {
+                        store.newSession(preset: preset, in: project)
+                    }
+                }
+            }
+            .buttonStyle(IconButtonStyle(size: 24))
             .help("New session in \(project.name)")
         }
+        .frame(minHeight: 28)
+        .padding(.trailing, 10)
+        .onHover { hovering = $0 }
         .contentShape(Rectangle())
         .onTapGesture { store.toggleCollapsed(project) }
         .help(project.path)
@@ -242,6 +253,92 @@ private struct ProjectHeader: View {
     }
 }
 
+/// Clickable sidebar row: custom selection (white 10 % + workspace ring) and a hover "…" menu.
+private struct SidebarSessionRow: View {
+    @Environment(AppStore.self) private var store
+    let session: Session
+    let workspace: Workspace
+    @State private var hovering = false
+
+    private var selected: Bool { store.selectedSessionID == session.id }
+
+    var body: some View {
+        SessionRow(session: session)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .overlay(alignment: .trailing) {
+                if hovering {
+                    PopoverMenuButton(width: 250) {
+                        Image(systemName: "ellipsis")
+                    } content: {
+                        SessionMenu(session: session)
+                    }
+                    .buttonStyle(IconButtonStyle(size: 26, filled: true))
+                    .help("Session options")
+                    .padding(.trailing, 6)
+                }
+            }
+            .background(RoundedRectangle(cornerRadius: 9)
+                .fill(Color.white.opacity(selected ? 0.10 : hovering ? 0.05 : 0)))
+            .overlay(RoundedRectangle(cornerRadius: 9)
+                .strokeBorder(selected ? Theme.ring(workspace.color) : .clear, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 9))
+            .onHover { hovering = $0 }
+            .onTapGesture { store.show(session.id) }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// Session actions for the hover popover.
+private struct SessionMenu: View {
+    @Environment(AppStore.self) private var store
+    let session: Session
+
+    var body: some View {
+        if session.archived {
+            MenuRow(title: "Restore", icon: "arrow.uturn.backward") { store.show(session.id) }
+        } else {
+            MenuRow(title: "Rename…", icon: "pencil") { store.renamingSessionID = session.id }
+            MenuRow(title: session.pinned ? "Unpin" : "Pin", icon: session.pinned ? "pin.slash" : "pin") {
+                store.togglePinned(session.id)
+            }
+            MenuRow(title: "Restart", icon: "arrow.clockwise") { store.restart(session.id) }
+            MenuRow(title: "Open in Split", icon: "rectangle.split.2x1") {
+                store.split(.horizontal)
+                store.show(session.id)
+            }
+            MenuDivider()
+            MenuRow(title: "Archive", icon: "archivebox", shortcut: "⇧⌘⌫") { store.archive(session.id) }
+        }
+        MenuRow(title: "Delete", icon: "trash", destructive: true) { store.deleteSession(session.id) }
+    }
+}
+
+/// Project actions for the hover popover.
+private struct ProjectMenu: View {
+    @Environment(AppStore.self) private var store
+    let project: Project
+
+    var body: some View {
+        let others = store.workspaces.filter { $0.id != project.workspaceID }
+        if !others.isEmpty {
+            MenuSectionLabel(title: "Move to workspace")
+            ForEach(others) { ws in
+                MenuRow(title: ws.name, icon: ws.symbol) { store.moveProject(project.id, to: ws.id) }
+            }
+            MenuDivider()
+        }
+        MenuSectionLabel(title: "Color")
+        ColorSwatchRow(selected: project.color) { store.setColor($0, for: project) }
+        MenuDivider()
+        MenuRow(title: "Reveal in Finder", icon: "folder") {
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: project.path)])
+        }
+        MenuRow(title: "Remove Project", icon: "minus.circle", destructive: true) { store.removeProject(project) }
+    }
+}
+
 /// Session row: status-tinted icon tile, title, status line with age, unread/attention dot.
 struct SessionRow: View {
     let session: Session
@@ -265,7 +362,7 @@ struct SessionRow: View {
                     .lineLimit(1)
                 TimelineView(.periodic(from: .now, by: 30)) { _ in
                     Text(statusLine)
-                        .font(.system(size: 11))
+                        .font(Theme.Font.caption)
                         .foregroundStyle(session.status.text)
                         .lineLimit(1)
                 }

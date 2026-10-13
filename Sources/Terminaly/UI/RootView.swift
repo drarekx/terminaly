@@ -17,6 +17,7 @@ struct RootView: View {
         }
         .preferredColorScheme(.dark)
         .tint(store.accent.color)
+        .environment(\.workspaceAccent, store.accent.color)
         .overlay {
             if store.showPalette {
                 CommandPaletteView()
@@ -47,34 +48,54 @@ struct RootView: View {
                     Text(p.name)
                 }
             }
-            .font(.system(size: 12))
-            .foregroundStyle(Theme.text.opacity(0.55))
+            .font(Theme.Font.label)
+            .foregroundStyle(Theme.secondaryText)
+            .padding(.horizontal, 6)
         }
         ToolbarItemGroup(placement: .primaryAction) {
-            Menu {
-                ForEach(store.presets) { preset in
-                    Button {
-                        store.newSession(preset: preset)
-                    } label: {
-                        Label(preset.label, systemImage: preset.symbol)
+            HStack(spacing: 2) {
+                Button {
+                    if let p = store.presets.first { store.newSession(preset: p) }
+                } label: {
+                    Label("New Session", systemImage: "plus").labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(PrimaryButtonStyle(compact: true))
+                .environment(\.workspaceAccent, store.accent.color)
+                .help("New \(store.presets.first?.label ?? "session") in \(store.currentProject?.name ?? "project") (⌘T)")
+                PopoverMenuButton(width: 280, accent: store.accent.color) {
+                    Image(systemName: "chevron.down")
+                } content: {
+                    MenuSectionLabel(title: "New session in \(store.currentProject?.name ?? "project")")
+                    ForEach(Array(store.presets.enumerated()), id: \.element.id) { i, preset in
+                        MenuRow(title: preset.label, icon: preset.symbol,
+                                subtitle: preset.command.isEmpty ? "login shell" : preset.command,
+                                shortcut: i == 0 ? "⌘T" : nil) {
+                            store.newSession(preset: preset)
+                        }
                     }
                 }
-            } label: {
-                Label("New Session", systemImage: "plus")
-            } primaryAction: {
-                if let p = store.presets.first { store.newSession(preset: p) }
+                .buttonStyle(IconButtonStyle(size: 28))
+                .help("Choose preset")
             }
-            .help("New session in \(store.currentProject?.name ?? "project")")
 
-            Button { store.split(.horizontal) } label: {
-                Label("Split Right", systemImage: "rectangle.split.2x1")
-            }
-            Button { store.split(.vertical) } label: {
-                Label("Split Down", systemImage: "rectangle.split.1x2")
-            }
+            Button { store.split(.horizontal) } label: { Image(systemName: "rectangle.split.2x1") }
+                .buttonStyle(IconButtonStyle())
+                .help("Split Right (⌘D)")
+                .accessibilityLabel("Split Right")
+            Button { store.split(.vertical) } label: { Image(systemName: "rectangle.split.1x2") }
+                .buttonStyle(IconButtonStyle())
+                .help("Split Down (⇧⌘D)")
+                .accessibilityLabel("Split Down")
             Button { store.showPalette = true } label: {
-                Label("Command Palette", systemImage: "magnifyingglass")
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                    Text("Search")
+                    Text("⌘K").foregroundStyle(Theme.tertiaryText)
+                }
+                .fixedSize()
             }
+            .buttonStyle(SecondaryButtonStyle(compact: true))
+            .help("Command Palette (⌘K)")
         }
     }
 }

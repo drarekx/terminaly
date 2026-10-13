@@ -34,24 +34,19 @@ struct WorkspaceTitle: View {
                         .font(.system(size: 17, weight: .bold))
                         .lineLimit(1)
                     Text(summary)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.text.opacity(0.62))
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.secondaryText)
                 }
                 .onTapGesture(count: 2) { store.renamingWorkspaceID = workspace.id }
             }
             Spacer(minLength: 4)
-            Menu {
-                WorkspaceMenu(workspace: workspace)
-            } label: {
+            PopoverMenuButton(width: 260) {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.text.opacity(0.8))
-                    .frame(width: 28, height: 28)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.06)))
+            } content: {
+                WorkspacePopover(workspace: workspace)
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
+            .buttonStyle(IconButtonStyle(size: 30, filled: true))
+            .help("Workspace options")
         }
         .frame(height: 36)
         .contextMenu { WorkspaceMenu(workspace: workspace) }
@@ -79,10 +74,11 @@ struct SidebarFooter: View {
     var body: some View {
         HStack(spacing: 6) {
             Button { store.addProjectWithPanel() } label: {
-                Image(systemName: "folder.badge.plus").font(.system(size: 13))
+                Image(systemName: "folder.badge.plus")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(IconButtonStyle())
             .help("Add Project (⌘O)")
+            .accessibilityLabel("Add Project")
 
             Spacer(minLength: 2)
             ScrollView(.horizontal) {
@@ -99,14 +95,17 @@ struct SidebarFooter: View {
             Spacer(minLength: 2)
 
             Button { withAnimation(.smooth) { _ = store.addWorkspace() } } label: {
-                Image(systemName: "plus").font(.system(size: 12, weight: .semibold))
+                Image(systemName: "plus")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(IconButtonStyle())
             .help("New Workspace (⇧⌘N)")
-            SettingsLink { Image(systemName: "gearshape").font(.system(size: 13)) }
-                .buttonStyle(.borderless)
+            .accessibilityLabel("New Workspace")
+            SettingsLink { Image(systemName: "gearshape") }
+                .buttonStyle(IconButtonStyle())
+                .help("Settings (⌘,)")
+                .accessibilityLabel("Settings")
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(Theme.sidebar(store.accent).overlay(Color.black.opacity(0.18)))
         .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
@@ -172,6 +171,45 @@ private struct WorkspaceDot: View {
     }
 }
 
+/// Spacious workspace menu for the title's "…" button.
+private struct WorkspacePopover: View {
+    @Environment(AppStore.self) private var store
+    let workspace: Workspace
+
+    var body: some View {
+        MenuRow(title: "Rename…", icon: "pencil") {
+            store.selectWorkspace(workspace.id)
+            store.renamingWorkspaceID = workspace.id
+        }
+        MenuDivider()
+        MenuSectionLabel(title: "Icon")
+        SymbolGrid(symbols: Workspace.symbols, selected: workspace.symbol) {
+            store.setWorkspaceStyle(workspace.id, symbol: $0)
+        }
+        MenuSectionLabel(title: "Color")
+        ColorSwatchRow(selected: workspace.color) { c in
+            withAnimation(.smooth) { store.setWorkspaceStyle(workspace.id, color: c) }
+        }
+        MenuDivider()
+        MenuRow(title: "Move Left", icon: "arrow.left") {
+            withAnimation(.smooth) { store.moveWorkspace(workspace.id, by: -1) }
+        }
+        .disabled(store.workspaces.first?.id == workspace.id)
+        MenuRow(title: "Move Right", icon: "arrow.right") {
+            withAnimation(.smooth) { store.moveWorkspace(workspace.id, by: 1) }
+        }
+        .disabled(store.workspaces.last?.id == workspace.id)
+        MenuRow(title: "New Workspace", icon: "plus.rectangle.on.rectangle", shortcut: "⇧⌘N") {
+            withAnimation(.smooth) { _ = store.addWorkspace() }
+        }
+        MenuDivider()
+        MenuRow(title: "Delete Workspace", icon: "trash", destructive: true) {
+            WorkspaceMenu.confirmDelete(workspace, store: store)
+        }
+        .disabled(store.workspaces.count <= 1)
+    }
+}
+
 /// Shared workspace actions (title menu, dot context menu).
 struct WorkspaceMenu: View {
     @Environment(AppStore.self) private var store
@@ -203,11 +241,11 @@ struct WorkspaceMenu: View {
             .disabled(store.workspaces.last?.id == workspace.id)
         Divider()
         Button("New Workspace") { withAnimation(.smooth) { _ = store.addWorkspace() } }
-        Button("Delete Workspace", role: .destructive) { confirmDelete() }
+        Button("Delete Workspace", role: .destructive) { Self.confirmDelete(workspace, store: store) }
             .disabled(store.workspaces.count <= 1)
     }
 
-    private func confirmDelete() {
+    static func confirmDelete(_ workspace: Workspace, store: AppStore) {
         let count = store.projects(in: workspace).count
         guard count > 0 else { return withAnimation(.smooth) { store.deleteWorkspace(workspace.id) } }
         let alert = NSAlert()
