@@ -27,6 +27,7 @@ struct PaneTreeView: View {
 
 struct PaneView: View {
     @Environment(AppStore.self) private var store
+    @AppStorage("terminalTheme") private var themeID = "graphite"
     let leafID: UUID
     let sessionID: UUID?
     @State private var hovering = false
@@ -45,7 +46,7 @@ struct PaneView: View {
             }
             content
         }
-        .background(Theme.pane)
+        .background(TerminalTheme.named(themeID).backgroundColor)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay {
             RoundedRectangle(cornerRadius: 10)

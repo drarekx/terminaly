@@ -19,6 +19,7 @@ struct TerminalyApp: App {
         Settings {
             SettingsView()
                 .environment(store)
+                .preferredColorScheme(.dark)
         }
     }
 }

@@ -13,12 +13,37 @@ enum Snapshot {
         Task {
             try? await Task.sleep(for: .seconds(2.5))
             let store = AppStore.shared
+            let env = ProcessInfo.processInfo.environment
+            // Optional live shell so terminal colors show up in the capture.
+            store.selectWorkspace(at: 0)
+            if let cmd = env["TERMINALY_SNAPSHOT_SHELL"], let project = store.visibleProjects.first {
+                store.closePane()
+                store.newSession(preset: Preset(label: "Shell", command: cmd), in: project)
+                try? await Task.sleep(for: .seconds(3))
+            }
             for i in 0..<min(store.workspaces.count, 3) {
                 store.selectWorkspace(at: i)
                 try? await Task.sleep(for: .seconds(1.2))
                 capture(to: url.appendingPathComponent("workspace-\(i).png"))
             }
             renderMenus(to: url.appendingPathComponent("menus.png"))
+            if env["TERMINALY_SETTINGS_TAB"] != nil {
+                // The app menu's "Settings…" (⌘,) item opens the SwiftUI Settings scene.
+                if let appMenu = NSApp.mainMenu?.items.first?.submenu,
+                   let item = appMenu.items.first(where: { $0.keyEquivalent == "," }),
+                   let action = item.action {
+                    NSApp.sendAction(action, to: item.target, from: item)
+                }
+                try? await Task.sleep(for: .seconds(1.5))
+                if let w = NSApp.windows.first(where: { $0.isVisible && $0.title != "Terminaly" && $0.contentView != nil }),
+                   let v = w.contentView?.superview ?? w.contentView,
+                   let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) {
+                    v.cacheDisplay(in: v.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: url.appendingPathComponent("settings.png"))
+                }
+            }
+            AppStore.shared.terminals.stopAll()
+            try? await Task.sleep(for: .milliseconds(300))
             exit(0)
         }
     }
@@ -66,6 +91,26 @@ enum Snapshot {
               let view = window.contentView?.superview ?? window.contentView,
               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)
+        // cacheDisplay skips layer-only paint (SwiftTerm draws its background as layer.backgroundColor):
+        // re-composite each terminal as background fill + its own cached drawing.
+        if let ctx = NSGraphicsContext(bitmapImageRep: rep) {
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = ctx
+            for term in allSubviews(of: view).compactMap({ $0 as? AgentTerminalView }) {
+                guard let termRep = term.bitmapImageRepForCachingDisplay(in: term.bounds) else { continue }
+                term.cacheDisplay(in: term.bounds, to: termRep)
+                var frame = term.convert(term.bounds, to: view)
+                if view.isFlipped { frame.origin.y = view.bounds.height - frame.maxY }
+                term.nativeBackgroundColor.setFill()
+                frame.fill()
+                termRep.draw(in: frame, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            }
+            NSGraphicsContext.restoreGraphicsState()
+        }
         try? rep.representation(using: .png, properties: [:])?.write(to: url)
+    }
+
+    private static func allSubviews(of view: NSView) -> [NSView] {
+        view.subviews + view.subviews.flatMap(allSubviews)
     }
 }

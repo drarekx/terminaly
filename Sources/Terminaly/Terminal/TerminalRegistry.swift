@@ -12,10 +12,8 @@ final class AgentTerminalView: TerminalView {
         self.sessionID = sessionID
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 500))
         terminalDelegate = bridge
-        font = NSFont.monospacedSystemFont(ofSize: TerminalPrefs.fontSize, weight: .regular)
-        nativeBackgroundColor = Theme.paneNS
-        nativeForegroundColor = Theme.textNS
-        caretColor = .systemTeal
+        font = TerminalFont.make(family: TerminalPrefs.fontFamily, size: TerminalPrefs.fontSize)
+        TerminalTheme.current.apply(to: self)
         optionAsMetaKey = TerminalPrefs.optionAsMeta
     }
 
@@ -98,6 +96,9 @@ enum TerminalPrefs {
     }
     static var optionAsMeta: Bool {
         UserDefaults.standard.object(forKey: "optionAsMeta") as? Bool ?? true
+    }
+    static var fontFamily: String {
+        UserDefaults.standard.string(forKey: "terminalFontFamily") ?? ""
     }
 }
 
@@ -231,8 +232,11 @@ final class TerminalRegistry {
     }
 
     func applyPrefs() {
+        let theme = TerminalTheme.current
+        let font = TerminalFont.make(family: TerminalPrefs.fontFamily, size: TerminalPrefs.fontSize)
         for v in views.values {
-            v.font = NSFont.monospacedSystemFont(ofSize: TerminalPrefs.fontSize, weight: .regular)
+            v.font = font
+            theme.apply(to: v)
             v.optionAsMetaKey = TerminalPrefs.optionAsMeta
         }
     }
