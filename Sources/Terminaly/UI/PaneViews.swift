@@ -9,6 +9,7 @@ struct PaneTreeView: View {
         switch node {
         case .leaf(let id, let sessionID):
             PaneView(leafID: id, sessionID: sessionID)
+                .background(Theme.ground)
         case .split(_, let axis, let children):
             if axis == .horizontal {
                 HSplitView {
@@ -27,6 +28,7 @@ struct PaneView: View {
     @Environment(AppStore.self) private var store
     let leafID: UUID
     let sessionID: UUID?
+    @State private var hovering = false
 
     private var isFocused: Bool { store.focusedLeafID == leafID }
     private var multiPane: Bool { store.layout.leafIDs.count > 1 }
@@ -38,43 +40,63 @@ struct PaneView: View {
             }
             content
         }
-        .frame(minWidth: 220, minHeight: 120)
+        .background(Theme.pane)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay {
-            if multiPane {
-                RoundedRectangle(cornerRadius: 2)
-                    .strokeBorder(isFocused ? Color.accentColor.opacity(0.7) : .clear, lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(isFocused && multiPane ? Theme.ring(store.accent) : Color.white.opacity(0.06), lineWidth: 1)
+                .allowsHitTesting(false)
         }
+        .padding(3)
+        .frame(minWidth: 220, minHeight: 120)
+        .animation(.easeOut(duration: 0.15), value: isFocused)
     }
 
     private var header: some View {
         HStack(spacing: 8) {
             if let s = store.session(sessionID) {
                 StatusDot(status: s.status)
-                Text(s.title).font(.system(size: 11, weight: .medium)).lineLimit(1)
+                Text(s.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.text.opacity(isFocused ? 1 : 0.8))
+                    .lineLimit(1)
                 if let p = store.project(s.projectID) {
-                    Text(p.name).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(p.name).font(.system(size: 12)).foregroundStyle(Theme.text.opacity(0.5)).lineLimit(1)
+                }
+                Spacer()
+                if s.status == .needsInput {
+                    Text("Needs input")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(s.status.text)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(s.status.dot.opacity(0.14)))
                 }
             } else {
-                Text("Empty pane").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("Empty pane").font(.system(size: 12)).foregroundStyle(Theme.text.opacity(0.5))
+                Spacer()
             }
-            Spacer()
-            Button { store.split(.horizontal, leaf: leafID) } label: { Image(systemName: "rectangle.split.2x1") }
-                .help("Split Right")
-            Button { store.split(.vertical, leaf: leafID) } label: { Image(systemName: "rectangle.split.1x2") }
-                .help("Split Down")
-            if multiPane {
-                Button { store.closePane(leafID) } label: { Image(systemName: "xmark") }
-                    .help("Close Pane")
+            Group {
+                Button { store.split(.horizontal, leaf: leafID) } label: { Image(systemName: "rectangle.split.2x1") }
+                    .help("Split Right")
+                Button { store.split(.vertical, leaf: leafID) } label: { Image(systemName: "rectangle.split.1x2") }
+                    .help("Split Down")
+                if multiPane {
+                    Button { store.closePane(leafID) } label: { Image(systemName: "xmark") }
+                        .help("Close Pane")
+                }
             }
+            .opacity(hovering || isFocused ? 1 : 0)
         }
         .buttonStyle(.borderless)
         .font(.system(size: 11))
+        .foregroundStyle(Theme.text.opacity(0.75))
         .padding(.horizontal, 10)
-        .frame(height: 26)
-        .background(isFocused ? Color.white.opacity(0.06) : Color.white.opacity(0.02))
+        .frame(height: 32)
+        .background(Color.white.opacity(isFocused ? 0.035 : 0.02))
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1) }
         .contentShape(Rectangle())
+        .onHover { hovering = $0 }
         .onTapGesture { store.focus(leaf: leafID) }
     }
 
@@ -84,7 +106,8 @@ struct PaneView: View {
             if let view = store.terminals.view(for: s.id) {
                 ZStack(alignment: .bottom) {
                     TerminalContainer(terminal: view) { store.focus(leaf: leafID) }
-                        .padding(.leading, 6)
+                        .padding(.leading, 10)
+                        .padding(.top, 6)
                     if s.status == .exited {
                         ExitedBar(session: s)
                     }
@@ -179,30 +202,66 @@ private struct EmptyPaneView: View {
     let leafID: UUID
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 16) {
             if let project = store.currentProject {
                 Text("New session in \(project.name)")
-                    .font(.headline)
-                HStack {
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120, maximum: 170), spacing: 10)], spacing: 10) {
                     ForEach(store.presets) { preset in
-                        Button {
+                        PresetCard(preset: preset) {
                             store.focus(leaf: leafID)
                             store.newSession(preset: preset, in: project)
-                        } label: {
-                            Label(preset.label, systemImage: preset.symbol)
-                                .frame(minWidth: 80)
                         }
-                        .controlSize(.large)
                     }
                 }
-                Text("⌘T new · ⌘K palette · ⌘D split").font(.caption).foregroundStyle(.tertiary)
+                .frame(maxWidth: 540)
+                Text("⌘T new · ⌘K palette · ⌘D split")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.text.opacity(0.5))
             } else {
                 Button("Add Project…") { store.addProjectWithPanel() }
+                    .buttonStyle(.borderedProminent)
                     .controlSize(.large)
             }
         }
+        .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { store.focus(leaf: leafID) }
+    }
+}
+
+private struct PresetCard: View {
+    @Environment(AppStore.self) private var store
+    let preset: Preset
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: preset.symbol)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(store.accent.color)
+                    .frame(height: 20)
+                Text(preset.label)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                Text(preset.command.isEmpty ? "login shell" : preset.command)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Theme.text.opacity(0.5))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(hovering ? 0.08 : 0.04)))
+            .overlay(RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(hovering ? Theme.ring(store.accent) : Color.white.opacity(0.08), lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }

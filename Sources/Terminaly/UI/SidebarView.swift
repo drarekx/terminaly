@@ -68,16 +68,14 @@ private struct WorkspacePage: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 4)
 
-            List(selection: Binding(
-                get: { store.selectedSessionID },
-                set: { if let id = $0 { store.show(id) } }
-            )) {
+            // Selection is drawn by SessionRow itself (design: white 10 % + workspace ring),
+            // so the native, inactive-window-black highlight is not used.
+            List {
                 ForEach(projects) { project in
                     Section {
                         if !project.collapsed {
                             ForEach(store.sessions(in: project)) { session in
-                                SessionRow(session: session)
-                                    .tag(session.id)
+                                selectableRow(session)
                                     .contextMenu { sessionMenu(session) }
                             }
                             if store.sessions(in: project).isEmpty {
@@ -92,8 +90,7 @@ private struct WorkspacePage: View {
                 if !archived.isEmpty {
                     Section(isExpanded: $showArchived) {
                         ForEach(archived) { session in
-                            SessionRow(session: session)
-                                .tag(session.id)
+                            selectableRow(session)
                                 .contextMenu {
                                     Button("Restore") { store.show(session.id) }
                                     Button("Delete", role: .destructive) { store.deleteSession(session.id) }
@@ -122,7 +119,7 @@ private struct WorkspacePage: View {
                 }
             }
         }
-        .background { WorkspaceTint(color: workspace.color.color) }
+        .background { Theme.sidebar(workspace.color) }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -135,6 +132,22 @@ private struct WorkspacePage: View {
             }
             return true
         }
+    }
+
+    private func selectableRow(_ session: Session) -> some View {
+        let selected = store.selectedSessionID == session.id
+        return SessionRow(session: session)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 9).fill(Color.white.opacity(selected ? 0.10 : 0)))
+            .overlay(RoundedRectangle(cornerRadius: 9)
+                .strokeBorder(selected ? Theme.ring(workspace.color) : .clear, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 9))
+            .onTapGesture { store.show(session.id) }
+            .listRowInsets(EdgeInsets(top: 1, leading: 4, bottom: 1, trailing: 4))
+            .listRowBackground(Color.clear)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -153,15 +166,6 @@ private struct WorkspacePage: View {
     }
 }
 
-/// Workspace color wash over the sidebar material: strong at the top, fading down.
-struct WorkspaceTint: View {
-    let color: Color
-
-    var body: some View {
-        LinearGradient(colors: [color.opacity(0.42), color.opacity(0.22), color.opacity(0.14)],
-                       startPoint: .top, endPoint: .bottom)
-    }
-}
 
 private struct ProjectHeader: View {
     @Environment(AppStore.self) private var store
@@ -173,19 +177,27 @@ private struct ProjectHeader: View {
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(.tertiary)
                 .frame(width: 10)
-            // Colored badge: plain symbol tints get overridden in sidebar section headers.
-            RoundedRectangle(cornerRadius: 4)
-                .fill(project.color.color.gradient)
-                .frame(width: 16, height: 16)
+            // Colored letter badge: plain symbol tints get overridden in sidebar section headers.
+            RoundedRectangle(cornerRadius: 5)
+                .fill(project.color.color)
+                .frame(width: 18, height: 18)
                 .overlay {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 8, weight: .bold))
+                    Text(project.name.prefix(1).uppercased())
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.white)
                 }
-            Text(project.name)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.primary)
+            Text(project.name.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(Theme.text.opacity(0.72))
+                .lineLimit(1)
             Spacer()
+            let count = store.sessions(in: project).count
+            if count > 0 {
+                Text("\(count)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.text.opacity(0.45))
+            }
             Menu {
                 ForEach(store.presets) { preset in
                     Button(preset.label) { store.newSession(preset: preset, in: project) }
@@ -230,29 +242,57 @@ private struct ProjectHeader: View {
     }
 }
 
+/// Session row: status-tinted icon tile, title, status line with age, unread/attention dot.
 struct SessionRow: View {
     let session: Session
 
+    private var dimmed: Bool { session.status == .exited }
+
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: session.symbol)
-                .frame(width: 16)
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(session.status.tile)
+                .frame(width: 28, height: 28)
+                .overlay {
+                    Image(systemName: session.symbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(session.status.dot)
+                }
+            VStack(alignment: .leading, spacing: 2) {
                 Text(session.title)
+                    .font(.system(size: 13, weight: session.unread || session.status == .needsInput ? .semibold : .medium))
+                    .foregroundStyle(Theme.text.opacity(dimmed ? 0.7 : 1))
                     .lineLimit(1)
-                    .fontWeight(session.unread ? .semibold : .regular)
-                Text(session.status.label + (session.exitCode.map { " (\($0))" } ?? ""))
-                    .font(.caption2)
-                    .foregroundStyle(session.status == .needsInput ? .orange : .secondary)
+                TimelineView(.periodic(from: .now, by: 30)) { _ in
+                    Text(statusLine)
+                        .font(.system(size: 11))
+                        .foregroundStyle(session.status.text)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 4)
             if session.pinned {
-                Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.tertiary)
+                Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(Theme.text.opacity(0.4))
             }
-            StatusDot(status: session.status)
+            if session.status == .needsInput {
+                Circle().fill(session.status.dot)
+                    .frame(width: 8, height: 8)
+                    .background(Circle().fill(session.status.dot.opacity(0.18)).frame(width: 14, height: 14))
+            } else if session.status == .working {
+                StatusDot(status: .working)
+            } else if session.unread {
+                Circle().fill(Theme.text).frame(width: 7, height: 7)
+            }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
+    }
+
+    private var statusLine: String {
+        if session.status == .exited {
+            return "Exited" + (session.exitCode.map { " (\($0))" } ?? "")
+        }
+        let age = session.statusChangedAt.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated))
+        return session.status == .starting ? "Starting…" : "\(session.status.label) · \(age)"
     }
 }
 

@@ -14,8 +14,8 @@ struct WorkspaceTitle: View {
             Image(systemName: workspace.symbol)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 7).fill(workspace.color.color.gradient))
+                .frame(width: 30, height: 30)
+                .background(RoundedRectangle(cornerRadius: 8).fill(workspace.color.color))
             if renaming {
                 TextField("Workspace name", text: $draft)
                     .textFieldStyle(.plain)
@@ -29,25 +29,39 @@ struct WorkspaceTitle: View {
                     }
                     .onChange(of: focused) { _, f in if !f { commit() } }
             } else {
-                Text(workspace.name)
-                    .font(.system(size: 17, weight: .bold))
-                    .lineLimit(1)
-                    .onTapGesture(count: 2) { store.renamingWorkspaceID = workspace.id }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(workspace.name)
+                        .font(.system(size: 17, weight: .bold))
+                        .lineLimit(1)
+                    Text(summary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.text.opacity(0.62))
+                }
+                .onTapGesture(count: 2) { store.renamingWorkspaceID = workspace.id }
             }
             Spacer(minLength: 4)
             Menu {
                 WorkspaceMenu(workspace: workspace)
             } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.text.opacity(0.8))
+                    .frame(width: 28, height: 28)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.06)))
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
         }
-        .frame(height: 30)
+        .frame(height: 36)
         .contextMenu { WorkspaceMenu(workspace: workspace) }
+    }
+
+    private var summary: String {
+        let projects = store.projects(in: workspace)
+        let ids = Set(projects.map(\.id))
+        let sessions = store.sessions.filter { ids.contains($0.projectID) && !$0.archived }.count
+        return "\(projects.count) project\(projects.count == 1 ? "" : "s") · \(sessions) session\(sessions == 1 ? "" : "s")"
     }
 
     private func commit() {
@@ -94,8 +108,8 @@ struct SidebarFooter: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .top) { Divider().opacity(0.5) }
+        .background(Theme.sidebar(store.accent).overlay(Color.black.opacity(0.18)))
+        .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
     }
 }
 
@@ -115,28 +129,28 @@ private struct WorkspaceDot: View {
         ZStack {
             if selected {
                 Circle()
-                    .fill(workspace.color.color.gradient)
+                    .fill(workspace.color.color)
                     .matchedGeometryEffect(id: "selected", in: namespace)
-                    .shadow(color: workspace.color.color.opacity(0.5), radius: 4, y: 1)
+                    .background(Circle().fill(Theme.ring(workspace.color)).padding(-3))
             } else {
-                Circle().fill(workspace.color.color.opacity(hovering || dropTarget ? 0.30 : 0.16))
+                Circle().fill(workspace.color.color.opacity(hovering || dropTarget ? 0.32 : 0.20))
             }
             Image(systemName: workspace.symbol)
                 .font(.system(size: selected ? 12 : 10, weight: .semibold))
                 .foregroundStyle(selected ? Color.white : workspace.color.color)
         }
-        .frame(width: selected ? 28 : 22, height: selected ? 28 : 22)
+        .frame(width: selected ? 32 : 24, height: selected ? 32 : 24)
         .overlay(alignment: .topTrailing) {
             if attention > 0 {
                 Circle().fill(.orange)
                     .frame(width: 8, height: 8)
-                    .overlay(Circle().stroke(.background, lineWidth: 1.5))
+                    .overlay(Circle().stroke(Theme.sidebar(store.accent), lineWidth: 2))
                     .offset(x: 1, y: -1)
             }
         }
         .overlay { if dropTarget { Circle().strokeBorder(workspace.color.color, lineWidth: 2).padding(-3) } }
         .scaleEffect(hovering && !selected ? 1.12 : 1)
-        .frame(width: 30, height: 30)
+        .frame(width: 36, height: 36)
         .contentShape(Circle())
         .animation(.spring(response: 0.32, dampingFraction: 0.72), value: selected)
         .animation(.snappy(duration: 0.15), value: hovering)

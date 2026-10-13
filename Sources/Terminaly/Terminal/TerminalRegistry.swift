@@ -13,8 +13,8 @@ final class AgentTerminalView: TerminalView {
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 500))
         terminalDelegate = bridge
         font = NSFont.monospacedSystemFont(ofSize: TerminalPrefs.fontSize, weight: .regular)
-        nativeBackgroundColor = NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.09, alpha: 1)
-        nativeForegroundColor = NSColor(calibratedWhite: 0.9, alpha: 1)
+        nativeBackgroundColor = Theme.paneNS
+        nativeForegroundColor = Theme.textNS
         caretColor = .systemTeal
         optionAsMetaKey = TerminalPrefs.optionAsMeta
     }

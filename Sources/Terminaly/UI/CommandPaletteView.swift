@@ -11,6 +11,7 @@ struct CommandPaletteView: View {
         let title: String
         let subtitle: String
         let symbol: String
+        var status: SessionStatus? = nil
         let action: () -> Void
     }
 
@@ -23,8 +24,8 @@ struct CommandPaletteView: View {
         for s in store.sessions where !s.archived {
             let project = store.project(s.projectID)?.name ?? ""
             let ws = store.workspace(of: s.id).map { "\($0.name) › " } ?? ""
-            all.append(Item(id: "s\(s.id)", title: s.title, subtitle: "\(ws)\(project) · \(s.status.label)",
-                            symbol: s.symbol) { store.show(s.id) })
+            all.append(Item(id: "s\(s.id)", title: s.title, subtitle: "\(ws)\(project)",
+                            symbol: s.symbol, status: s.status) { store.show(s.id) })
         }
         for p in store.visibleProjects {
             for preset in store.presets {
@@ -52,43 +53,62 @@ struct CommandPaletteView: View {
     var body: some View {
         let results = items
         ZStack(alignment: .top) {
-            Color.black.opacity(0.25)
+            Color.black.opacity(0.35)
                 .ignoresSafeArea()
                 .onTapGesture { close() }
             VStack(spacing: 0) {
-                TextField("Search sessions, presets, actions…", text: $query)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 16))
-                    .padding(14)
-                    .focused($focused)
-                    .onSubmit { run(results) }
-                Divider()
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.text.opacity(0.6))
+                    TextField("Search sessions, presets, actions…", text: $query)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 15))
+                        .focused($focused)
+                        .onSubmit { run(results) }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                Rectangle().fill(Theme.hairline).frame(height: 1)
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(results.enumerated()), id: \.element.id) { i, item in
                                 HStack(spacing: 10) {
-                                    Image(systemName: item.symbol).frame(width: 18)
+                                    if let status = item.status {
+                                        Circle().fill(status.dot).frame(width: 8, height: 8).frame(width: 18)
+                                    } else {
+                                        Image(systemName: item.symbol)
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(Theme.text.opacity(0.6))
+                                            .frame(width: 18)
+                                    }
                                     Text(item.title)
+                                        .font(.system(size: 13, weight: i == index ? .semibold : .regular))
                                     Spacer()
-                                    Text(item.subtitle).foregroundStyle(.secondary).font(.caption)
+                                    Text(item.subtitle)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(Theme.text.opacity(0.6))
                                 }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 7)
-                                .background(i == index ? Color.accentColor.opacity(0.25) : .clear)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 9)
+                                .background(RoundedRectangle(cornerRadius: 8)
+                                    .fill(i == index ? store.accent.color.opacity(0.22) : .clear))
                                 .contentShape(Rectangle())
                                 .onTapGesture { index = i; run(results) }
                                 .id(i)
                             }
                         }
                     }
-                    .frame(maxHeight: 320)
+                    .padding(6)
+                    .frame(maxHeight: 340)
                     .onChange(of: index) { _, i in proxy.scrollTo(i) }
                 }
             }
-            .frame(width: 560)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-            .shadow(radius: 24)
+            .frame(width: 580)
+            .background(RoundedRectangle(cornerRadius: 14).fill(Theme.elevated))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
+            .shadow(color: .black.opacity(0.5), radius: 30, y: 18)
             .padding(.top, 80)
         }
         .onAppear { focused = true }

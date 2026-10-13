@@ -11,10 +11,12 @@ struct RootView: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 380)
         } detail: {
             PaneTreeView(node: store.layout)
-                .background(Color(nsColor: NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.09, alpha: 1)))
-                .environment(\.colorScheme, .dark)  // terminal area is always dark
+                .padding(6)
+                .background(Theme.ground)
                 .toolbar { toolbar }
         }
+        .preferredColorScheme(.dark)
+        .tint(store.accent.color)
         .overlay {
             if store.showPalette {
                 CommandPaletteView()
@@ -37,6 +39,17 @@ struct RootView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            HStack(spacing: 4) {
+                Text(store.currentWorkspace?.name ?? "")
+                if let p = store.currentProject {
+                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                    Text(p.name)
+                }
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(Theme.text.opacity(0.55))
+        }
         ToolbarItemGroup(placement: .primaryAction) {
             Menu {
                 ForEach(store.presets) { preset in

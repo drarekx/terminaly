@@ -30,16 +30,8 @@ enum FolderColor: String, Codable, CaseIterable {
     case blue, purple, pink, red, orange, yellow, green, gray
 
     var color: Color {
-        switch self {
-        case .blue: .blue
-        case .purple: .purple
-        case .pink: .pink
-        case .red: .red
-        case .orange: .orange
-        case .yellow: .yellow
-        case .green: .green
-        case .gray: .gray
-        }
+        let (r, g, b) = rgb
+        return Color(.sRGB, red: r / 255, green: g / 255, blue: b / 255)
     }
 }
 
@@ -75,15 +67,7 @@ enum SessionStatus: String, Codable {
         }
     }
 
-    var tint: Color {
-        switch self {
-        case .starting: .gray
-        case .working: .blue
-        case .idle: .green
-        case .needsInput: .orange
-        case .exited: Color(white: 0.55)
-        }
-    }
+    var tint: Color { dot }
 }
 
 struct Session: Identifiable, Codable, Hashable {
@@ -100,6 +84,7 @@ struct Session: Identifiable, Codable, Hashable {
     var status: SessionStatus = .starting
     var unread = false
     var exitCode: Int32?
+    var statusChangedAt = Date()
 
     enum CodingKeys: String, CodingKey {
         case id, projectID, title, command, symbol, createdAt, archived, pinned, userTitled

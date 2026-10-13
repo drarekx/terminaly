@@ -73,6 +73,9 @@ final class AppStore {
 
     var currentWorkspace: Workspace? { workspaces.first { $0.id == selectedWorkspaceID } }
 
+    /// Color of the selected workspace; drives focus rings, selection and primary buttons.
+    var accent: FolderColor { currentWorkspace?.color ?? .blue }
+
     /// Projects of the selected workspace, in sidebar order.
     var visibleProjects: [Project] { projects.filter { $0.workspaceID == selectedWorkspaceID } }
 
@@ -275,6 +278,7 @@ final class AppStore {
     func applyStatus(_ id: UUID, status raw: String, detail: String?, notify: Bool, exitCode: Int32?) {
         guard let old = session(id), let status = SessionStatus(rawValue: raw) else { return }
         update(id) {
+            if $0.status != status { $0.statusChangedAt = Date() }
             $0.status = status
             if status == .exited { $0.exitCode = exitCode }
         }
