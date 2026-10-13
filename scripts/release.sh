@@ -15,7 +15,7 @@ SPARKLE_BIN=".build/artifacts/sparkle/Sparkle/bin"
 git rev-parse "$TAG" >/dev/null 2>&1 && { echo "$TAG already exists"; exit 1; }
 
 echo "$VERSION" > VERSION
-git commit -m "Release $VERSION" VERSION
+git diff --quiet VERSION || git commit -m "Release $VERSION" VERSION
 ./scripts/bundle.sh release
 BUILD="$(git rev-list --count HEAD)"
 
