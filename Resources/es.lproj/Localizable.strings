@@ -161,3 +161,4 @@
 "Sends Enter: accepts the highlighted option" = "Envía Enter: acepta la opción marcada";
 "Sends Esc to the dialog" = "Envía Esc al diálogo";
 "Wants to use %@" = "Quiere usar %@";
+"Show Update Log" = "Mostrar registro de actualizaciones";

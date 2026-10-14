@@ -208,6 +208,11 @@ private struct GeneralSettings: View {
                     .disabled(!updater.canCheckForUpdates)
                 Text("Running sessions keep going during an update; they live in the tly host.")
                     .font(.caption).foregroundStyle(.secondary)
+                if FileManager.default.fileExists(atPath: UpdateDiagnostics.logURL.path) {
+                    Button("Show Update Log") {
+                        NSWorkspace.shared.activateFileViewerSelecting([UpdateDiagnostics.logURL])
+                    }
+                }
             } else {
                 Text("Updates are only available in the bundled app (scripts/bundle.sh).")
                     .foregroundStyle(.secondary)

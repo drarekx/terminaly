@@ -74,6 +74,8 @@ TERMINALY_STATE_DIR=<dir con state.json> TERMINALY_SNAPSHOT_DIR=<out> build/Term
 - `CFBundleVersion` = número de commits (`git rev-list --count HEAD`); `CFBundleShortVersionString` = archivo `VERSION`.
 - Firma de código ad-hoc (no hay Developer ID). Sparkle acepta el cambio de firma porque la clave EdDSA es la misma; **no cambies `SUPublicEDKey`** o las copias instaladas dejarán de actualizarse. La clave privada solo está en el llavero de macOS del autor.
 - Instalador: `curl -fsSL https://raw.githubusercontent.com/drarekx/terminaly/main/install.sh | bash` (instala en /Applications, enlaza `tly`, quita la cuarentena). Variables de prueba: `TERMINALY_ZIP_URL`, `TERMINALY_INSTALL_DIR`, `TERMINALY_BIN_DIR`, `TERMINALY_NO_OPEN`.
+- Errores de actualización: Sparkle solo dice "ocurrió un error"; `UpdateDiagnostics` escribe la causa (con errores encadenados y URL) en `~/Library/Logs/Terminaly/update.log` (botón en Ajustes → General). Probado el 2026-10-14: la descarga de 0.4.0 → 0.4.1 funciona en el Mac del autor; un fallo de descarga en otra máquina apunta a su red o caché.
+- Probar una actualización sin tocar la instalación real: bajar una release vieja a una carpeta temporal, cambiar `CFBundleIdentifier` (p. ej. `.updtest`), re-firmar ad-hoc, `defaults write <id> SUAutomaticallyUpdate -bool YES` y `SULastCheckTime` antiguo, lanzarla con `TERMINALY_STATE_DIR` temporal y mirar `~/Library/Caches/<id>/org.sparkle-project.Sparkle/`. Borrar después ese dominio de defaults y la caché.
 - Publicar una release es visible para todos: pregunta antes.
 
 ## Trampas conocidas
