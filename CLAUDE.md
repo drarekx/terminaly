@@ -60,7 +60,8 @@ swift build                                   # debug
 TERMINALY_STATE_DIR=$(mktemp -d) .build/debug/Terminaly --selftest   # test end-to-end, debe imprimir SELFTEST PASS
 TERMINALY_STATE_DIR=<dir con state.json> TERMINALY_SNAPSHOT_DIR=<out> build/Terminaly.app/Contents/MacOS/Terminaly
                                               # renderiza la ventana a PNG (un archivo por workspace, máx 3) + menus.png
-                                              # extra: TERMINALY_SNAPSHOT_SHELL='cmd' abre una shell real; TERMINALY_SETTINGS_TAB=terminal|general captura Ajustes
+                                              # extra: TERMINALY_SNAPSHOT_SHELL='cmd' abre una shell real; TERMINALY_SETTINGS_TAB=terminal|general captura Ajustes;
+                                              # TERMINALY_CLICK_AT=x,y simula un clic (puntos desde arriba-izquierda) y guarda after-click.png
 ./scripts/release.sh 0.3.0 "notas"            # publica release + appcast (ver abajo)
 ```
 
@@ -82,6 +83,7 @@ TERMINALY_STATE_DIR=<dir con state.json> TERMINALY_SNAPSHOT_DIR=<out> build/Term
 
 - **SwiftTerm**: la salida del proceso NO pasa por `dataReceived` (va por un adapter interno); usa `setProcessOutputHandler`. No hay `cols`/`rows` públicos: el tamaño se guarda desde `sizeChanged` (`gridSize`). `becomeFirstResponder` no es `open`; los métodos de delegado chocan con métodos públicos de `TerminalView`, así que el delegado es un objeto aparte (`TerminalBridge`). Leer la pantalla: `selectAll()` + `getSelection()`.
 - **TerminalContainer**: SwiftUI reutiliza el `NSViewRepresentable` del panel al cambiar de sesión. El contenedor debe quedarse con un único subview (el terminal actual) y lleva `.id(session.id)`; si no, los terminales se apilan y al volver a una sesión se ve otra (paso 6 del self-test).
+- **Ancho de la barra lateral**: cualquier hijo más ancho que la columna (el pie con muchos workspaces, títulos largos) ensancha el carrusel y saca de la vista el borde derecho ("+" de proyecto, Ajustes). Páginas y pie van con `.frame(width: geo.size.width)`. Prueba siempre con una copia del `state.json` real (muchos workspaces y títulos largos), no solo con datos cortos.
 - **Sidebar List**: los SF Symbols coloreados en cabeceras de sección salen blancos; usa formas rellenas (badge con letra). La selección nativa sale negra con la ventana inactiva: la selección se dibuja a mano en `selectableRow`.
 - **Rutas de socket** limitadas a 104 bytes: si el `stateDir` es largo se usa `/tmp/tly-<uid>-<hash>.sock`.
 - `SyncConnection.request` guarda los eventos que llegan antes de la respuesta en otra cola; no los vuelvas a meter en la de lectura (bucle infinito).

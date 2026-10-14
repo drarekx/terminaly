@@ -70,8 +70,8 @@ struct WorkspaceTitle: View {
 
 /// Bottom of the sidebar: add project · workspace icon dots · new workspace · settings.
 struct SidebarFooter: View {
-    @Environment(AppStore.self) private var store
-    @Namespace private var selection
+    @Environment(AppStore.self) var store
+    @Namespace var selection
 
     var body: some View {
         HStack(spacing: 6) {
@@ -82,19 +82,13 @@ struct SidebarFooter: View {
             .help("Add Project (⌘O)")
             .accessibilityLabel("Add Project")
 
-            Spacer(minLength: 2)
-            ScrollView(.horizontal) {
-                HStack(spacing: 4) {
-                    ForEach(store.workspaces) { ws in
-                        WorkspaceDot(workspace: ws, namespace: selection)
-                    }
-                }
-                .padding(.horizontal, 4)
-                .frame(minHeight: 34)
+            // Centered when the dots fit, scrollable when there are too many.
+            ViewThatFits(in: .horizontal) {
+                dots.frame(maxWidth: .infinity)
+                ScrollView(.horizontal) { dots }
+                    .scrollIndicators(.never)
             }
-            .scrollIndicators(.never)
-            .fixedSize(horizontal: store.workspaces.count <= 6, vertical: false)
-            Spacer(minLength: 2)
+            .frame(maxWidth: .infinity)
 
             Button { withAnimation(.smooth) { _ = store.addWorkspace() } } label: {
                 Image(systemName: "plus")
@@ -107,10 +101,22 @@ struct SidebarFooter: View {
                 .help("Settings (⌘,)")
                 .accessibilityLabel("Settings")
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 6)
         .padding(.vertical, 6)
         .background(Theme.sidebar(store.accent).overlay(Color.black.opacity(0.18)))
         .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+    }
+}
+
+extension SidebarFooter {
+    var dots: some View {
+        HStack(spacing: 2) {
+            ForEach(store.workspaces) { ws in
+                WorkspaceDot(workspace: ws, namespace: selection)
+            }
+        }
+        .padding(.horizontal, 2)
+        .frame(minHeight: 36)
     }
 }
 

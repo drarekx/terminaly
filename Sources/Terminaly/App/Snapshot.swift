@@ -29,6 +29,21 @@ enum Snapshot {
                 try? await Task.sleep(for: .seconds(1.2))
                 capture(to: url.appendingPathComponent("workspace-\(i).png"))
             }
+            if let pt = env["TERMINALY_CLICK_AT"]?.split(separator: ",").compactMap({ Double($0) }), pt.count == 2,
+               let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }) {
+                // Simulated click at window-top-left coordinates (points), then report what opened.
+                let p = NSPoint(x: pt[0], y: w.contentLayoutRect.maxY - pt[1] + (w.frame.height - w.contentLayoutRect.maxY))
+                for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                    if let e = NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                  windowNumber: w.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                        w.sendEvent(e)
+                    }
+                }
+                try? await Task.sleep(for: .seconds(1))
+                let names = NSApp.windows.filter(\.isVisible).map { String(describing: type(of: $0)) }
+                FileHandle.standardError.write(Data("click: windows=\(names) collapsed=\(store.projects.map { "\($0.name)=\($0.collapsed)" })\n".utf8))
+                capture(to: url.appendingPathComponent("after-click.png"))
+            }
             renderMenus(to: url.appendingPathComponent("menus.png"))
             if env["TERMINALY_SETTINGS_TAB"] != nil {
                 // The app menu's "Settings…" (⌘,) item opens the SwiftUI Settings scene.

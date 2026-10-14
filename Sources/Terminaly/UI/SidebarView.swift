@@ -23,9 +23,13 @@ struct SidebarView: View {
                 .scrollTargetBehavior(.paging)
                 .scrollPosition(id: $scrolledID)
                 .scrollIndicators(.never)
+                .frame(width: geo.size.width)
                 .ignoresSafeArea(edges: .vertical)
 
+                // Pinned to the column width: a wider footer used to widen the whole sidebar and
+                // push every row's trailing "+" out of view.
                 SidebarFooter()
+                    .frame(width: geo.size.width)
             }
         }
         .onAppear {
