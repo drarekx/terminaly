@@ -20,8 +20,8 @@ Hecho: menús en popover, botones legibles, escala tipográfica, interfaz en esp
 
 | | Funcionalidad | Qué y por qué | Esfuerzo |
 |---|---|---|---|
-| | Aprobar desde la notificación | Botones «Permitir» / «Denegar» en la notificación y en la cabecera del panel cuando Claude pide permiso, sin tener que ir al terminal. | M |
-| | Reanudar tras reiniciar el Mac | El hook guarda el `session_id` de Claude; «Reanudar» relanza con `claude --resume <id>` en la misma carpeta. Hoy, tras un reinicio, solo se puede empezar de cero. | M |
+| ✅ | Aprobar desde la notificación | Botones «Permitir» / «Denegar» en la notificación y en la cabecera del panel cuando Claude pide permiso, sin tener que ir al terminal. | M |
+| ✅ | Reanudar tras reiniciar el Mac | El hook guarda el `session_id` de Claude; «Reanudar» relanza con `claude --resume <id>` en la misma carpeta. Hoy, tras un reinicio, solo se puede empezar de cero. | M |
 | | Más agentes con estado | Hook `notify` de Codex y notificaciones OSC 9/777 de cualquier programa: estado y avisos sin depender de la heurística de salida. | M |
 | | Worktrees por sesión | «Nueva sesión en worktree»: crea la rama y el worktree, y muestra la rama en la fila. Varios agentes en el mismo repo sin pisarse. | M |
 | | Buscar en el historial | ⌘F en el panel (la barra de búsqueda de SwiftTerm) y búsqueda global sobre los logs del daemon desde la paleta. | M |

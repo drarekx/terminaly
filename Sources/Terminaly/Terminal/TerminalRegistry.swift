@@ -156,10 +156,10 @@ final class TerminalRegistry {
         return v
     }
 
-    func start(_ session: Session, cwd: String) {
+    func start(_ session: Session, cwd: String, command: String? = nil) {
         let view = makeView(session.id)
         var m = Message(type: "create", id: session.id)
-        m.command = session.command
+        m.command = command ?? session.command
         m.cwd = cwd
         (m.cols, m.rows) = view.gridSize
         client.request(m) { [weak self] reply in
@@ -179,7 +179,8 @@ final class TerminalRegistry {
         client.request(Message(type: "attach", id: id)) { [weak self] reply in
             guard let self, reply.error == nil else { return }
             if let info = reply.sessions?.first {
-                self.store?.applyStatus(id, status: info.status, detail: nil, notify: false, exitCode: info.exitCode)
+                self.store?.applyStatus(id, status: info.status, detail: nil, notify: false, exitCode: info.exitCode,
+                                        permission: info.permission ?? false, agentSessionID: info.agentSessionID)
             }
             // Nudge the size so full-screen programs repaint after the replay.
             let (cols, rows) = view.gridSize
@@ -216,7 +217,8 @@ final class TerminalRegistry {
         case "status":
             if msg.status == "exited" { running.remove(id) }
             store?.applyStatus(id, status: msg.status ?? "idle", detail: msg.detail,
-                               notify: msg.notify ?? false, exitCode: msg.exitCode)
+                               notify: msg.notify ?? false, exitCode: msg.exitCode,
+                               permission: msg.permission ?? false, agentSessionID: msg.agentSessionID)
         case "removed":
             running.remove(id)
         default:

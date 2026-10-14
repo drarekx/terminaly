@@ -12,6 +12,9 @@ final class HostedSession {
     private(set) var running = false
     private(set) var exitCode: Int32?
     private(set) var status = "starting"
+    private(set) var permissionPending = false
+    private(set) var agentSessionID: String?
+    private(set) var detail: String?
     private var master: Int32 = -1
     private var readSource: DispatchSourceRead?
     private var exitSource: DispatchSourceProcess?
@@ -33,7 +36,8 @@ final class HostedSession {
 
     var info: SessionInfo {
         SessionInfo(id: id, command: command, cwd: cwd, pid: pid, running: running,
-                    status: status, exitCode: exitCode, createdAt: createdAt)
+                    status: status, exitCode: exitCode, createdAt: createdAt,
+                    permission: permissionPending, agentSessionID: agentSessionID)
     }
 
     var replay: [UInt8] { ring.contents }
@@ -159,12 +163,23 @@ final class HostedSession {
         guard running else { return }
         hookDriven = true
         quietTimer?.cancel()
+        if let sid = payload["session_id"] as? String, !sid.isEmpty { agentSessionID = sid }
         switch event {
         case "UserPromptSubmit", "PreToolUse", "PostToolUse", "SubagentStop":
+            permissionPending = false
             setStatus("working")
-        case "Notification", "PermissionRequest":
-            setStatus("needsInput", detail: payload["message"] as? String)
+        case "PermissionRequest":
+            permissionPending = true
+            let tool = payload["tool_name"] as? String
+            setStatus("needsInput", detail: tool.map { "Permission: \($0)" } ?? payload["message"] as? String)
+        case "Notification":
+            let message = payload["message"] as? String
+            // Claude sends "…needs your permission to use X" alongside PermissionRequest,
+            // and "…waiting for your input" when idle.
+            permissionPending = permissionPending || (message?.localizedCaseInsensitiveContains("permission") ?? false)
+            setStatus("needsInput", detail: message)
         case "Stop", "SessionStart":
+            permissionPending = false
             setStatus("idle")
         case "SessionEnd":
             hookDriven = false
@@ -175,6 +190,7 @@ final class HostedSession {
 
     private func setStatus(_ new: String, detail: String? = nil) {
         let old = status
+        self.detail = detail
         if old == new && new != "needsInput" { return }
         status = new
         // Notifications only for hook-driven sessions; output heuristics are too noisy.

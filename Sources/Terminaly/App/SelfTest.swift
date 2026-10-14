@@ -76,6 +76,25 @@ enum SelfTest {
         print("4 panes: centered=\(centered) split=\(split) zoom=\(zoomedOK) moved=\(moved)")
         guard centered && split && zoomedOK && moved else { return finish(false, "panes") }
 
+        // 5. Permission dialog answered from the app, and resume command
+        let permHook = ClaudeHookInstaller.command(for: "PermissionRequest")
+        let permCmd = "echo '{\"session_id\":\"abc-123\",\"tool_name\":\"Bash\"}' | ( \(permHook) ); read -r answer; echo GOT-$answer-END"
+        guard let c = store.newSession(preset: Preset(label: "Perm", command: permCmd), in: project) else { return finish(false, "create") }
+        let pending = await waitUntil(5) {
+            store.session(c.id)?.permissionPending == true && store.session(c.id)?.agentSessionID == "abc-123"
+        }
+        store.respondToPermission(c.id, allow: true)
+        let answered = await waitUntil(5) {
+            store.terminals.view(for: c.id)?.screenText().contains("GOT--END") ?? false
+        }
+        var claude = Session(projectID: project.id, title: "Claude", command: "claude", symbol: "sparkles")
+        claude.agentSessionID = "abc-123"
+        let resumeOK = claude.resumeCommand == "claude --resume abc-123"
+        claude.agentSessionID = "x; rm -rf ~"
+        let sanitized = claude.resumeCommand == "claude --resume xrm-rf"
+        print("5 permission: pending=\(pending) answered=\(answered) resume=\(resumeOK) sanitized=\(sanitized)")
+        guard pending && answered && resumeOK && sanitized else { return finish(false, "permission") }
+
         finish(true, "")
     }
 

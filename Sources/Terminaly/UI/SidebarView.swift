@@ -311,6 +311,9 @@ private struct SessionMenu: View {
                 store.togglePinned(session.id)
             }
             MenuRow(title: "Restart", icon: "arrow.clockwise") { store.restart(session.id) }
+            if session.resumeCommand != nil && !store.terminals.isRunning(session.id) {
+                MenuRow(title: "Resume Conversation", icon: "arrow.uturn.forward") { store.resume(session.id) }
+            }
             MenuRow(title: "Open in Split", icon: "rectangle.split.2x1") {
                 store.split(.horizontal)
                 store.show(session.id)

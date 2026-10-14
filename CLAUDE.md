@@ -29,6 +29,9 @@ Frames `[UInt32 BE longitud][UInt8 tipo][payload]`. Tipos: `json` (un `Message` 
 - `Model/AppStore.swift`: estado único `@Observable` (workspaces, proyectos, sesiones, presets, layout de paneles). Persistencia en `state.json` (escritura con debounce de 400 ms). Los campos nuevos de `PersistedState` deben ser opcionales o con `decodeIfPresent`: hay usuarios con archivos antiguos (ver migración a workspace "Personal" en `load()`).
 - `Terminal/DaemonClient.swift` + `TerminalRegistry.swift`: conexión asíncrona al daemon en main queue; un `AgentTerminalView` por sesión, reutilizado y re-parentado (`TerminalContainer`).
 - Workspaces: cada uno tiene nombre, icono, color y su propio `PaneNode` (árbol de splits). El layout vivo está en `store.layout` y se vuelca al workspace con `commitLayout()` al cambiar o guardar.
+- Permisos: el daemon marca `permissionPending` con `PermissionRequest` (o una `Notification` que hable de "permission") y lo limpia con cualquier evento de trabajo/parada. `respondToPermission` envía Enter (acepta la opción marcada, "Sí") o Esc al PTY, solo si hay permiso pendiente. La barra va debajo del terminal, nunca encima: el diálogo del agente está en sus últimas líneas.
+- Reanudar: los hooks traen `session_id`; se guarda en `Session.agentSessionID` (persistido) y `resumeCommand` = `claude --resume <id saneado>`.
+- Cambios en el daemon solo llegan cuando se reinicia `tly` (al quedarse sin sesiones ni clientes, o `tly shutdown`): los campos nuevos del protocolo deben ser opcionales para convivir con un daemon antiguo.
 - Hooks de Claude Code: `Hooks/HookInstaller.swift` escribe en `~/.claude/settings.json` (con backup `.terminaly-backup`); las entradas se reconocen por contener `TERMINALY_SESSION_ID`.
 
 ## Diseño ("Graphite")

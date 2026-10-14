@@ -211,6 +211,8 @@ final class Daemon {
             m.detail = detail
             m.notify = notify
             m.exitCode = session.exitCode
+            m.permission = session.permissionPending
+            m.agentSessionID = session.agentSessionID
             self?.broadcast(m)
         }
         s.onExit = { [weak self] session in

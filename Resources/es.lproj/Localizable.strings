@@ -153,3 +153,11 @@
 "now" = "ahora";
 "~/.claude/settings.json is not valid JSON; left untouched." = "~/.claude/settings.json no es un JSON válido; no se ha modificado.";
 "⌘T new · ⌘K palette · ⌘D split" = "⌘T nueva · ⌘K paleta · ⌘D dividir";
+"Allow" = "Permitir";
+"Deny" = "Denegar";
+"Needs your permission" = "Necesita tu permiso";
+"New Conversation" = "Nueva conversación";
+"Resume Conversation" = "Reanudar conversación";
+"Sends Enter: accepts the highlighted option" = "Envía Enter: acepta la opción marcada";
+"Sends Esc to the dialog" = "Envía Esc al diálogo";
+"Wants to use %@" = "Quiere usar %@";

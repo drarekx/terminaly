@@ -98,6 +98,10 @@ public struct Message: Codable {
     public var exitCode: Int32?
     public var error: String?
     public var version: String?
+    /// Status events: the agent is showing a permission dialog right now.
+    public var permission: Bool?
+    /// Agent's own conversation id (Claude `session_id`), learned from hooks; used to resume.
+    public var agentSessionID: String?
 
     public init(type: String, reqID: Int? = nil, id: UUID? = nil) {
         self.type = type
@@ -115,8 +119,11 @@ public struct SessionInfo: Codable, Hashable {
     public var status: String
     public var exitCode: Int32?
     public var createdAt: Date
+    public var permission: Bool?
+    public var agentSessionID: String?
 
-    public init(id: UUID, command: String, cwd: String, pid: Int32, running: Bool, status: String, exitCode: Int32?, createdAt: Date) {
+    public init(id: UUID, command: String, cwd: String, pid: Int32, running: Bool, status: String, exitCode: Int32?, createdAt: Date,
+                permission: Bool? = nil, agentSessionID: String? = nil) {
         self.id = id
         self.command = command
         self.cwd = cwd
@@ -125,6 +132,8 @@ public struct SessionInfo: Codable, Hashable {
         self.status = status
         self.exitCode = exitCode
         self.createdAt = createdAt
+        self.permission = permission
+        self.agentSessionID = agentSessionID
     }
 }
 

@@ -80,14 +80,27 @@ struct Session: Identifiable, Codable, Hashable {
     var archived = false
     var pinned = false
     var userTitled = false
+    /// Agent conversation id (Claude `session_id`) for `--resume`.
+    var agentSessionID: String?
     /// Runtime-only state, not persisted.
     var status: SessionStatus = .starting
     var unread = false
     var exitCode: Int32?
     var statusChangedAt = Date()
+    /// The agent is showing a permission dialog; Allow/Deny can answer it.
+    var permissionPending = false
+    var attentionDetail: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, projectID, title, command, symbol, createdAt, archived, pinned, userTitled
+        case id, projectID, title, command, symbol, createdAt, archived, pinned, userTitled, agentSessionID
+    }
+
+    /// Command that continues the agent's last conversation, when the agent supports it.
+    var resumeCommand: String? {
+        guard let sid = agentSessionID, !sid.isEmpty,
+              command.split(separator: " ").first == "claude" else { return nil }
+        let safe = sid.filter { $0.isLetter || $0.isNumber || $0 == "-" }
+        return safe.isEmpty ? nil : "claude --resume \(safe)"
     }
 }
 

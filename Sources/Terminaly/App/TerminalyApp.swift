@@ -132,9 +132,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         guard let raw = response.notification.request.content.userInfo["sessionID"] as? String,
               let id = UUID(uuidString: raw) else { return }
+        let action = response.actionIdentifier
         await MainActor.run {
-            NSApp.activate()
-            AppStore.shared.show(id)
+            switch action {
+            case Notifier.allowAction:
+                AppStore.shared.respondToPermission(id, allow: true)
+            case Notifier.denyAction:
+                AppStore.shared.respondToPermission(id, allow: false)
+            default:
+                NSApp.activate()
+                AppStore.shared.show(id)
+            }
         }
     }
 

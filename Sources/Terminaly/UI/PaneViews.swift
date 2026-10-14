@@ -123,12 +123,15 @@ struct PaneView: View {
     private var content: some View {
         if let s = store.session(sessionID) {
             if let view = store.terminals.view(for: s.id) {
-                ZStack(alignment: .bottom) {
+                // Bars sit below the terminal, never over it: the agent's own dialog is on its last lines.
+                VStack(spacing: 0) {
                     TerminalContainer(terminal: view) { store.focus(leaf: leafID) }
                         .padding(.leading, 10)
                         .padding(.top, 6)
                     if s.status == .exited {
                         ExitedBar(session: s)
+                    } else if s.permissionPending {
+                        PermissionBar(session: s)
                     }
                 }
             } else {
@@ -200,13 +203,54 @@ private struct ExitedBar: View {
             Spacer()
             Button("Archive") { store.archive(session.id) }
                 .buttonStyle(SecondaryButtonStyle(compact: true))
-            Button("Restart") { store.restart(session.id) }
-                .buttonStyle(PrimaryButtonStyle(compact: true))
+            if session.resumeCommand != nil {
+                Button("Restart") { store.restart(session.id) }
+                    .buttonStyle(SecondaryButtonStyle(compact: true))
+                Button("Resume Conversation") { store.resume(session.id) }
+                    .buttonStyle(PrimaryButtonStyle(compact: true))
+            } else {
+                Button("Restart") { store.restart(session.id) }
+                    .buttonStyle(PrimaryButtonStyle(compact: true))
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Theme.elevated)
         .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+    }
+}
+
+/// Shown while the agent waits on a permission dialog: answer it without going to the terminal.
+private struct PermissionBar: View {
+    @Environment(AppStore.self) private var store
+    let session: Session
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "hand.raised.fill").foregroundStyle(SessionStatus.needsInput.dot)
+            Text(label)
+                .font(Theme.Font.bodyMedium)
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+            Spacer()
+            Button("Deny") { store.respondToPermission(session.id, allow: false) }
+                .buttonStyle(SecondaryButtonStyle(compact: true, destructive: true))
+                .help("Sends Esc to the dialog")
+            Button("Allow") { store.respondToPermission(session.id, allow: true) }
+                .buttonStyle(PrimaryButtonStyle(compact: true))
+                .help("Sends Enter: accepts the highlighted option")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(hex: 0x2A2112))
+        .overlay(alignment: .top) { Rectangle().fill(SessionStatus.needsInput.dot.opacity(0.5)).frame(height: 1) }
+    }
+
+    /// The host reports "Permission: <tool>"; Claude's own notification text is shown as is.
+    private var label: String {
+        guard let detail = session.attentionDetail else { return String(localized: "Needs your permission") }
+        if detail.hasPrefix("Permission: ") { return String(localized: "Wants to use \(String(detail.dropFirst(12)))") }
+        return detail
     }
 }
 
@@ -229,11 +273,25 @@ private struct DeadSessionView: View {
             }
                 .font(Theme.Font.body)
                 .foregroundStyle(Theme.secondaryText)
-            Button { store.restart(session.id) } label: {
-                Label("Start", systemImage: "play.fill")
+            HStack(spacing: 10) {
+                if session.resumeCommand != nil {
+                    Button { store.restart(session.id) } label: {
+                        Label("New Conversation", systemImage: "plus")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    Button { store.resume(session.id) } label: {
+                        Label("Resume Conversation", systemImage: "arrow.uturn.forward")
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .keyboardShortcut(.defaultAction)
+                } else {
+                    Button { store.restart(session.id) } label: {
+                        Label("Start", systemImage: "play.fill")
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .keyboardShortcut(.defaultAction)
+                }
             }
-            .buttonStyle(PrimaryButtonStyle())
-            .keyboardShortcut(.defaultAction)
             .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

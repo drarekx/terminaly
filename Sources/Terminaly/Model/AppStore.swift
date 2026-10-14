@@ -196,9 +196,32 @@ final class AppStore {
     func restart(_ id: UUID) {
         guard let s = session(id), let p = project(s.projectID) else { return }
         terminals.stop(id)
-        update(id) { $0.status = .starting; $0.exitCode = nil }
+        update(id) { $0.status = .starting; $0.exitCode = nil; $0.permissionPending = false }
         terminals.start(s, cwd: p.path)
         show(id)
+    }
+
+    /// Restarts the session continuing the agent's previous conversation (`claude --resume <id>`).
+    func resume(_ id: UUID) {
+        guard let s = session(id), let p = project(s.projectID), let command = s.resumeCommand else { return }
+        terminals.stop(id)
+        update(id) { $0.status = .starting; $0.exitCode = nil; $0.permissionPending = false }
+        terminals.start(s, cwd: p.path, command: command)
+        show(id)
+    }
+
+    /// Answers the agent's permission dialog: Enter accepts the highlighted "Yes", Esc declines.
+    func respondToPermission(_ id: UUID, allow: Bool) {
+        guard let s = session(id), s.permissionPending, terminals.isRunning(id) else { return }
+        terminals.client.sendInput(id, Array((allow ? "\r" : "\u{1b}").utf8)[...])
+        update(id) {
+            $0.permissionPending = false
+            $0.attentionDetail = nil
+            $0.status = allow ? .working : .idle
+            $0.statusChangedAt = Date()
+        }
+        Notifier.clear(sessionID: id)
+        Notifier.updateBadge(count: sessions.filter { $0.status == .needsInput }.count)
     }
 
     func archive(_ id: UUID) {
@@ -313,16 +336,22 @@ final class AppStore {
     }
 
     /// Status reported by the session host (hooks or output activity).
-    func applyStatus(_ id: UUID, status raw: String, detail: String?, notify: Bool, exitCode: Int32?) {
+    func applyStatus(_ id: UUID, status raw: String, detail: String?, notify: Bool, exitCode: Int32?,
+                     permission: Bool = false, agentSessionID: String? = nil) {
         guard let old = session(id), let status = SessionStatus(rawValue: raw) else { return }
         update(id) {
             if $0.status != status { $0.statusChangedAt = Date() }
             $0.status = status
             if status == .exited { $0.exitCode = exitCode }
+            $0.permissionPending = status == .needsInput && permission
+            $0.attentionDetail = status == .needsInput ? detail : nil
+            if let agentSessionID { $0.agentSessionID = agentSessionID }
         }
+        if agentSessionID != nil && agentSessionID != old.agentSessionID { scheduleSave() }
         if notify && !(NSApp.isActive && selectedSessionID == id) {
             update(id) { $0.unread = true }
-            Notifier.post(session: old, project: project(old.projectID), status: status, detail: detail)
+            Notifier.post(session: old, project: project(old.projectID), status: status, detail: detail,
+                          permission: status == .needsInput && permission)
         }
         Notifier.updateBadge(count: sessions.filter { $0.status == .needsInput }.count)
     }
