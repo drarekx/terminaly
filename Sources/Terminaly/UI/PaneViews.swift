@@ -126,6 +126,7 @@ struct PaneView: View {
                 // Bars sit below the terminal, never over it: the agent's own dialog is on its last lines.
                 VStack(spacing: 0) {
                     TerminalContainer(terminal: view) { store.focus(leaf: leafID) }
+                        .id(s.id)  // a new container per session, never a reused one
                         .padding(.leading, 10)
                         .padding(.top, 6)
                     if s.status == .exited {
@@ -168,10 +169,13 @@ struct TerminalContainer: NSViewRepresentable {
 
     func updateNSView(_ container: NSView, context: Context) {
         context.coordinator.onClick = onClick
-        if terminal.superview !== container { attach(to: container) }
+        if terminal.superview !== container || container.subviews.count != 1 { attach(to: container) }
     }
 
+    /// Makes `terminal` the container's only subview. A reused container could otherwise keep a
+    /// previous session's terminal stacked on top, so switching back showed the wrong one.
     private func attach(to container: NSView) {
+        for other in container.subviews where other !== terminal { other.removeFromSuperview() }
         terminal.removeFromSuperview()
         terminal.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(terminal)
@@ -181,6 +185,7 @@ struct TerminalContainer: NSViewRepresentable {
             terminal.topAnchor.constraint(equalTo: container.topAnchor),
             terminal.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
+        terminal.needsDisplay = true
     }
 }
 

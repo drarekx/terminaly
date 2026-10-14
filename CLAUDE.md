@@ -65,7 +65,6 @@ TERMINALY_STATE_DIR=<dir con state.json> TERMINALY_SNAPSHOT_DIR=<out> build/Term
 ```
 
 - **Verifica siempre con `--selftest`** antes de commitear cambios en store, daemon o protocolo. Cubre: workspaces (y migración si `SELFTEST_EXPECT_LEGACY_PROJECTS=N`), hooks → needsInput, heurística working → idle, y reinicio simulado de la app con replay.
-- El texto del terminal no siempre sale en la captura (el buffer sí lo tiene: compruébalo con `screenText()`); el resto de la UI sí es fiel.
 - Para cambios visuales usa el modo snapshot: no hay permiso de grabación de pantalla, pero la app se pinta a sí misma (`cacheDisplay`). Siembra un `state.json` de prueba en un directorio temporal; nunca uses el estado real del usuario.
 - Usa siempre `TERMINALY_STATE_DIR` en pruebas: si no, tocarías `~/Library/Application Support/Terminaly` (datos reales y el daemon real).
 
@@ -80,6 +79,7 @@ TERMINALY_STATE_DIR=<dir con state.json> TERMINALY_SNAPSHOT_DIR=<out> build/Term
 ## Trampas conocidas
 
 - **SwiftTerm**: la salida del proceso NO pasa por `dataReceived` (va por un adapter interno); usa `setProcessOutputHandler`. No hay `cols`/`rows` públicos: el tamaño se guarda desde `sizeChanged` (`gridSize`). `becomeFirstResponder` no es `open`; los métodos de delegado chocan con métodos públicos de `TerminalView`, así que el delegado es un objeto aparte (`TerminalBridge`). Leer la pantalla: `selectAll()` + `getSelection()`.
+- **TerminalContainer**: SwiftUI reutiliza el `NSViewRepresentable` del panel al cambiar de sesión. El contenedor debe quedarse con un único subview (el terminal actual) y lleva `.id(session.id)`; si no, los terminales se apilan y al volver a una sesión se ve otra (paso 6 del self-test).
 - **Sidebar List**: los SF Symbols coloreados en cabeceras de sección salen blancos; usa formas rellenas (badge con letra). La selección nativa sale negra con la ventana inactiva: la selección se dibuja a mano en `selectableRow`.
 - **Rutas de socket** limitadas a 104 bytes: si el `stateDir` es largo se usa `/tmp/tly-<uid>-<hash>.sock`.
 - `SyncConnection.request` guarda los eventos que llegan antes de la respuesta en otra cola; no los vuelvas a meter en la de lectura (bucle infinito).

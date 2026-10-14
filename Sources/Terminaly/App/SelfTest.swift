@@ -95,6 +95,19 @@ enum SelfTest {
         print("5 permission: pending=\(pending) answered=\(answered) resume=\(resumeOK) sanitized=\(sanitized)")
         guard pending && answered && resumeOK && sanitized else { return finish(false, "permission") }
 
+        // 6. Switching sessions in one pane shows exactly the selected terminal, on top
+        _ = store.addWorkspace(name: "Switch")
+        store.show(a.id)
+        try? await Task.sleep(for: .milliseconds(400))
+        store.show(b.id)
+        try? await Task.sleep(for: .milliseconds(400))
+        store.show(a.id)
+        try? await Task.sleep(for: .milliseconds(600))
+        let visible = visibleTerminals()
+        let switched = visible.map(\.sessionID) == [a.id]
+        print("6 switch: visible=\(visible.map { $0.sessionID == a.id ? "a" : $0.sessionID == b.id ? "b" : "?" }) ok=\(switched)")
+        guard switched else { return finish(false, "switch") }
+
         finish(true, "")
     }
 
@@ -128,6 +141,20 @@ enum SelfTest {
         store.removeProject(store.project(p.id)!)
         if !ok { finish(false, "workspaces") }
         return ok
+    }
+
+    /// Terminal views actually in the window, topmost per container (what the user sees).
+    private static func visibleTerminals() -> [AgentTerminalView] {
+        guard let root = NSApp.windows.first(where: { $0.isVisible })?.contentView else { return [] }
+        var result: [AgentTerminalView] = []
+        func walk(_ v: NSView) {
+            let terms = v.subviews.compactMap { $0 as? AgentTerminalView }
+            if let top = terms.last, !top.isHiddenOrHasHiddenAncestor { result.append(top) }
+            if terms.count > 1 { result.append(contentsOf: terms.dropLast()) }  // stacked = bug
+            v.subviews.filter { !($0 is AgentTerminalView) }.forEach(walk)
+        }
+        walk(root)
+        return result
     }
 
     private static func finish(_ ok: Bool, _ msg: String) {
