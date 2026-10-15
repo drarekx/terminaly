@@ -73,6 +73,16 @@ struct PaneView: View {
                 if let p = store.project(s.projectID) {
                     Text(p.name).font(Theme.Font.body).foregroundStyle(Theme.tertiaryText).lineLimit(1)
                 }
+                if let branch = s.branch {
+                    Label(branch, systemImage: "arrow.triangle.branch")
+                        .labelStyle(BranchLabelStyle())
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.secondaryText)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.06)))
+                        .lineLimit(1)
+                }
                 Spacer()
                 if s.status == .needsInput {
                     Text("Needs input")

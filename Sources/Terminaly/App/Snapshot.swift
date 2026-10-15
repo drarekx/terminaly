@@ -44,6 +44,20 @@ enum Snapshot {
                 FileHandle.standardError.write(Data("click: windows=\(names) collapsed=\(store.projects.map { "\($0.name)=\($0.collapsed)" })\n".utf8))
                 capture(to: url.appendingPathComponent("after-click.png"))
             }
+            if env["TERMINALY_SNAPSHOT_WORKTREE"] != nil {
+                store.selectWorkspace(at: 0)
+                try? await Task.sleep(for: .seconds(1))
+                if let p = store.visibleProjects.first(where: { store.gitProjects.contains($0.id) }) {
+                    store.worktreeRequestProjectID = p.id
+                    try? await Task.sleep(for: .seconds(1.5))
+                    if let sheet = NSApp.windows.first(where: { $0.isSheet && $0.isVisible }),
+                       let v = sheet.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) {
+                        v.cacheDisplay(in: v.bounds, to: rep)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: url.appendingPathComponent("sheet.png"))
+                    }
+                    store.worktreeRequestProjectID = nil
+                }
+            }
             renderMenus(to: url.appendingPathComponent("menus.png"))
             if env["TERMINALY_SETTINGS_TAB"] != nil {
                 // The app menu's "Settings…" (⌘,) item opens the SwiftUI Settings scene.

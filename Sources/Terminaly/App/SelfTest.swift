@@ -108,6 +108,36 @@ enum SelfTest {
         print("6 switch: visible=\(visible.map { $0.sessionID == a.id ? "a" : $0.sessionID == b.id ? "b" : "?" }) ok=\(switched)")
         guard switched else { return finish(false, "switch") }
 
+        // 7. Worktree session: own folder and branch; removal keeps the branch
+        let repo = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tly-repo-\(Int.random(in: 1000...9999))")
+        try? FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        try? "hi\n".write(to: repo.appendingPathComponent("README"), atomically: true, encoding: .utf8)
+        _ = try? await Git.run(["init", "-q", "-b", "main"], in: repo.path)
+        _ = try? await Git.run(["add", "."], in: repo.path)
+        _ = try? await Git.run(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init"], in: repo.path)
+        let repoProject = store.addProject(at: repo)
+        var wtOK = false, rejectedEmpty = false, removed = false, branchKept = false
+        do {
+            let s = try await store.newWorktreeSession(preset: Preset(label: "WT", command: "pwd; git branch --show-current"),
+                                                         in: repoProject, branch: "feat/self test")
+            let expected = Git.worktreePath(repo: repo.path, branch: "feat/self-test")
+            wtOK = await waitUntil(5) {
+                let text = store.terminals.view(for: s!.id)?.screenText() ?? ""
+                return text.contains("feat/self-test") && text.contains(URL(fileURLWithPath: expected).lastPathComponent)
+            } && s?.branch == "feat/self-test"
+            do { _ = try await store.newWorktreeSession(preset: Preset(label: "WT", command: ""), in: repoProject, branch: " ") }
+            catch { rejectedEmpty = true }
+            try await store.removeWorktree(of: s!.id)
+            removed = !FileManager.default.fileExists(atPath: expected) && store.session(s!.id) == nil
+            branchKept = (try? await Git.run(["show-ref", "--verify", "refs/heads/feat/self-test"], in: repo.path)) != nil
+        } catch {
+            print("7 worktree error: \(error.localizedDescription)")
+        }
+        try? FileManager.default.removeItem(at: repo)
+        try? FileManager.default.removeItem(at: repo.deletingLastPathComponent().appendingPathComponent(repo.lastPathComponent + ".worktrees"))
+        print("7 worktree: started=\(wtOK) rejectEmpty=\(rejectedEmpty) removed=\(removed) branchKept=\(branchKept)")
+        guard wtOK && rejectedEmpty && removed && branchKept else { return finish(false, "worktree") }
+
         finish(true, "")
     }
 

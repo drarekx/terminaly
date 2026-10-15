@@ -24,6 +24,8 @@ struct Project: Identifiable, Codable, Hashable {
     var collapsed = false
     /// nil only in state files written before workspaces existed; fixed on load.
     var workspaceID: UUID?
+    /// Presets launched together by "Start All" (optional so older state files decode).
+    var startupPresetIDs: [UUID]?
 }
 
 enum FolderColor: String, Codable, CaseIterable {
@@ -82,6 +84,9 @@ struct Session: Identifiable, Codable, Hashable {
     var userTitled = false
     /// Agent conversation id (Claude `session_id`) for `--resume`.
     var agentSessionID: String?
+    /// Git worktree this session runs in (instead of the project folder), and its branch.
+    var worktreePath: String?
+    var branch: String?
     /// Runtime-only state, not persisted.
     var status: SessionStatus = .starting
     var unread = false
@@ -92,7 +97,8 @@ struct Session: Identifiable, Codable, Hashable {
     var attentionDetail: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, projectID, title, command, symbol, createdAt, archived, pinned, userTitled, agentSessionID
+        case id, projectID, title, command, symbol, createdAt, archived, pinned, userTitled, agentSessionID,
+             worktreePath, branch
     }
 
     /// Command that continues the agent's last conversation, when the agent supports it.

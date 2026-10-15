@@ -218,6 +218,12 @@ private struct ProjectHeader: View {
                         store.newSession(preset: preset, in: project)
                     }
                 }
+                if store.gitProjects.contains(project.id) {
+                    MenuDivider()
+                    MenuRow(title: "New Session in Worktree…", icon: "arrow.triangle.branch") {
+                        store.worktreeRequestProjectID = project.id
+                    }
+                }
             }
             .buttonStyle(IconButtonStyle(size: 24))
             .help("New session in \(project.name)")
@@ -324,8 +330,36 @@ private struct SessionMenu: View {
             }
             MenuDivider()
             MenuRow(title: "Archive", icon: "archivebox", shortcut: "⇧⌘⌫") { store.archive(session.id) }
+            if session.worktreePath != nil {
+                MenuRow(title: "Remove Worktree…", icon: "arrow.triangle.branch", destructive: true) {
+                    confirmRemoveWorktree()
+                }
+            }
         }
         MenuRow(title: "Delete", icon: "trash", destructive: true) { store.deleteSession(session.id) }
+    }
+}
+
+extension SessionMenu {
+    fileprivate func confirmRemoveWorktree() {
+        guard let path = session.worktreePath else { return }
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Remove worktree “\(session.branch ?? "")”?")
+        alert.informativeText = String(localized: "Stops the session and deletes \(path). The branch is kept. Uncommitted changes block the removal.")
+        alert.addButton(withTitle: String(localized: "Remove"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let id = session.id
+        Task { @MainActor in
+            do {
+                try await store.removeWorktree(of: id)
+            } catch {
+                let fail = NSAlert()
+                fail.messageText = String(localized: "Could not remove the worktree")
+                fail.informativeText = error.localizedDescription
+                fail.runModal()
+            }
+        }
     }
 }
 
@@ -374,6 +408,13 @@ struct SessionRow: View {
                     .font(.system(size: 13, weight: session.unread || session.status == .needsInput ? .semibold : .medium))
                     .foregroundStyle(Theme.text.opacity(dimmed ? 0.7 : 1))
                     .lineLimit(1)
+                if let branch = session.branch {
+                    Label(branch, systemImage: "arrow.triangle.branch")
+                        .labelStyle(BranchLabelStyle())
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.secondaryText)
+                        .lineLimit(1)
+                }
                 TimelineView(.periodic(from: .now, by: 30)) { _ in
                     Text(statusLine)
                         .font(Theme.Font.caption)
@@ -422,6 +463,16 @@ struct SessionRow: View {
         calendar.locale = AppLanguage.locale
         formatter.calendar = calendar
         return formatter.string(from: seconds) ?? ""
+    }
+}
+
+/// Tight icon + text for branch names.
+struct BranchLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 3) {
+            configuration.icon.font(.system(size: 10, weight: .semibold))
+            configuration.title
+        }
     }
 }
 

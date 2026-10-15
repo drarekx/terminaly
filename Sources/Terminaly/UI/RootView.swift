@@ -41,6 +41,14 @@ struct RootView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        .sheet(isPresented: Binding(
+            get: { store.worktreeRequestProjectID != nil },
+            set: { if !$0 { store.worktreeRequestProjectID = nil } }
+        )) {
+            if let p = store.project(store.worktreeRequestProjectID) {
+                WorktreeSheet(project: p).environment(store)
+            }
+        }
         .onChange(of: store.renamingSessionID) { _, id in
             renameText = store.session(id)?.title ?? ""
         }

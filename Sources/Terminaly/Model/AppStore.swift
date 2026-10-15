@@ -22,6 +22,10 @@ final class AppStore {
     var renamingWorkspaceID: UUID?
     /// Pane shown alone (⌘↩); runtime only.
     var zoomedLeafID: UUID?
+    /// Projects that are git repositories (worktree sessions are offered for these).
+    var gitProjects: Set<UUID> = []
+    /// Project whose "New Session in Worktree" sheet is open.
+    var worktreeRequestProjectID: UUID?
 
     @ObservationIgnored let terminals = TerminalRegistry()
     @ObservationIgnored private var saveTask: Task<Void, Never>?
@@ -34,6 +38,21 @@ final class AppStore {
             selectedWorkspaceID = ws.id
         }
         terminals.store = self
+        refreshGitProjects()
+    }
+
+    func refreshGitProjects() {
+        let candidates = projects.map { ($0.id, $0.path) }
+        Task {
+            var found: Set<UUID> = []
+            for (id, path) in candidates where await Git.isRepository(path) { found.insert(id) }
+            self.gitProjects = found
+        }
+    }
+
+    /// Where a session's shell starts: its worktree, else its project folder.
+    func workingDirectory(for s: Session) -> String? {
+        s.worktreePath ?? project(s.projectID)?.path
     }
 
     /// Reconnects to the session host: re-attaches surviving sessions and adopts ones
@@ -133,6 +152,7 @@ final class AppStore {
                         workspaceID: selectedWorkspaceID ?? workspaces.first?.id)
         projects.append(p)
         scheduleSave()
+        refreshGitProjects()
         return p
     }
 
@@ -157,19 +177,21 @@ final class AppStore {
     // MARK: Sessions
 
     @discardableResult
-    func newSession(preset: Preset, in project: Project? = nil) -> Session? {
+    func newSession(preset: Preset, in project: Project? = nil, worktreePath: String? = nil, branch: String? = nil) -> Session? {
         guard let project = project ?? currentProject else {
             addProjectWithPanel()
             guard let p = visibleProjects.first else { return nil }
             return newSession(preset: preset, in: p)
         }
         let n = sessions.filter { $0.projectID == project.id && $0.command == preset.command }.count + 1
-        let s = Session(projectID: project.id,
+        var s = Session(projectID: project.id,
                         title: n > 1 ? "\(preset.label) \(n)" : preset.label,
                         command: preset.command,
                         symbol: preset.symbol)
+        s.worktreePath = worktreePath
+        s.branch = branch
         sessions.append(s)
-        terminals.start(s, cwd: project.path)
+        terminals.start(s, cwd: worktreePath ?? project.path)
         show(s.id)
         scheduleSave()
         return s
@@ -194,19 +216,19 @@ final class AppStore {
     }
 
     func restart(_ id: UUID) {
-        guard let s = session(id), let p = project(s.projectID) else { return }
+        guard let s = session(id), let cwd = workingDirectory(for: s) else { return }
         terminals.stop(id)
         update(id) { $0.status = .starting; $0.exitCode = nil; $0.permissionPending = false }
-        terminals.start(s, cwd: p.path)
+        terminals.start(s, cwd: cwd)
         show(id)
     }
 
     /// Restarts the session continuing the agent's previous conversation (`claude --resume <id>`).
     func resume(_ id: UUID) {
-        guard let s = session(id), let p = project(s.projectID), let command = s.resumeCommand else { return }
+        guard let s = session(id), let cwd = workingDirectory(for: s), let command = s.resumeCommand else { return }
         terminals.stop(id)
         update(id) { $0.status = .starting; $0.exitCode = nil; $0.permissionPending = false }
-        terminals.start(s, cwd: p.path, command: command)
+        terminals.start(s, cwd: cwd, command: command)
         show(id)
     }
 
@@ -523,5 +545,26 @@ extension AppStore {
         for s in sessions where s.projectID == projectID { clearFromLayouts(s.id) }
         if let sid = selectedSessionID, session(sid)?.projectID == projectID { selectedSessionID = nil }
         scheduleSave()
+    }
+}
+
+// MARK: Worktrees
+
+extension AppStore {
+    /// Creates `<repo>.worktrees/<branch>` and starts the preset there.
+    @discardableResult
+    func newWorktreeSession(preset: Preset, in project: Project, branch rawBranch: String) async throws -> Session? {
+        let branch = Git.sanitizeBranch(rawBranch)
+        guard !branch.isEmpty else { throw Git.Failure(message: String(localized: "Enter a branch name.")) }
+        let path = try await Git.addWorktree(repo: project.path, branch: branch)
+        return newSession(preset: preset, in: project, worktreePath: path, branch: branch)
+    }
+
+    /// Removes the session's worktree (refuses if it has uncommitted changes) and the session.
+    func removeWorktree(of id: UUID) async throws {
+        guard let s = session(id), let path = s.worktreePath, let p = project(s.projectID) else { return }
+        terminals.stop(id)
+        try await Git.removeWorktree(repo: p.path, path: path)
+        deleteSession(id)
     }
 }

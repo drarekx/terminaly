@@ -162,3 +162,15 @@
 "Sends Esc to the dialog" = "Envía Esc al diálogo";
 "Wants to use %@" = "Quiere usar %@";
 "Show Update Log" = "Mostrar registro de actualizaciones";
+"Branch" = "Rama";
+"Could not remove the worktree" = "No se pudo quitar el worktree";
+"Create" = "Crear";
+"Enter a branch name." = "Escribe un nombre de rama.";
+"New Session in Worktree" = "Nueva sesión en worktree";
+"New Session in Worktree…" = "Nueva sesión en worktree…";
+"Preset" = "Preset";
+"Remove" = "Quitar";
+"Remove Worktree…" = "Quitar worktree…";
+"Remove worktree “%@”?" = "¿Quitar el worktree «%@»?";
+"Runs the agent on its own branch and folder, so several agents can work on %@ without stepping on each other." = "El agente trabaja en su propia rama y carpeta, así varios agentes pueden trabajar en %@ sin pisarse.";
+"Stops the session and deletes %@. The branch is kept. Uncommitted changes block the removal." = "Detiene la sesión y borra %@. La rama se conserva. Si hay cambios sin commit, no se borra.";
