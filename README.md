@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/logo-dark.png">
+    <img src="brand/logo-light.png" alt="terminaly — Todos tus agentes. Un solo terminal." width="560">
+  </picture>
+</p>
+
 # Terminaly
 
 Native macOS app (SwiftUI + SwiftTerm) for running and steering CLI agent sessions, inspired by Unpeel.

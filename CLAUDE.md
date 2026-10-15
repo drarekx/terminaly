@@ -52,6 +52,11 @@ Canvas: https://claude.ai/artifact/NXCTs7pMK3XnPDpKTfmoPY. Tokens en `UI/Theme.s
 - Al añadir textos, extrae las claves y traduce las que falten: `swift build --product Terminaly -Xswiftc -emit-localized-strings -Xswiftc -emit-localized-strings-path -Xswiftc <dir>` genera `.stringsdata` (JSON) por archivo.
 - Selector en Ajustes → General (`AppLanguage`: escribe `AppleLanguages` del dominio de la app y relanza). Probar sin tocar ajustes: pasar `-AppleLanguages "(es)"` al ejecutable. El sistema del autor está en catalán con español detrás, así que "Sistema" muestra español.
 
+## Marca e icono
+
+- Fuente de verdad: `brand/icon.svg` (y `icon-small.svg` para ≤32 px). `scripts/make-icon.sh` genera `Resources/AppIcon.icns` (lo copia `bundle.sh`; `CFBundleIconFile` = `AppIcon`) y `brand/icon-1024.png`. No edites el `.icns` a mano.
+- Logotipos y banner: `brand/src/*.html` → PNG con `scripts/tools/render-html.swift` (WebKit, carga JetBrains Mono de Google Fonts). Detalles en `brand/README.md`.
+
 ## Comandos
 
 ```sh
