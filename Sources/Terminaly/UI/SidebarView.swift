@@ -476,17 +476,44 @@ struct BranchLabelStyle: LabelStyle {
     }
 }
 
+/// The pulse runs as a Core Animation layer animation: a SwiftUI `repeatForever` re-lays out
+/// the whole window every frame and pins the main thread at ~100% CPU.
 struct StatusDot: View {
     let status: SessionStatus
-    @State private var pulse = false
 
     var body: some View {
-        Circle()
-            .fill(status.tint)
+        PulsingDot(color: NSColor(status.tint), pulsing: status == .working)
             .frame(width: 8, height: 8)
-            .opacity(status == .working ? (pulse ? 0.35 : 1) : 1)
-            .animation(status == .working ? .easeInOut(duration: 0.7).repeatForever() : .default, value: pulse)
-            .onAppear { pulse = status == .working }
-            .onChange(of: status) { _, s in pulse = s == .working }
+    }
+}
+
+private struct PulsingDot: NSViewRepresentable {
+    let color: NSColor
+    let pulsing: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.wantsLayer = true
+        view.layer?.cornerRadius = 4
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        guard let layer = view.layer else { return }
+        layer.backgroundColor = color.cgColor
+        let running = layer.animation(forKey: "pulse") != nil
+        if pulsing && !running {
+            let pulse = CABasicAnimation(keyPath: "opacity")
+            pulse.fromValue = 1
+            pulse.toValue = 0.35
+            pulse.duration = 0.7
+            pulse.autoreverses = true
+            pulse.repeatCount = .infinity
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            pulse.isRemovedOnCompletion = false
+            layer.add(pulse, forKey: "pulse")
+        } else if !pulsing && running {
+            layer.removeAnimation(forKey: "pulse")
+        }
     }
 }
