@@ -12,6 +12,8 @@ tly — Terminaly session host
   tly logs <id> [--lines N]          recent output (raw)
   tly attach <id>                    attach this terminal (detach: Ctrl-\\)
   tly wait <id> [--timeout S]        block until the session is idle or needs input
+  tly pause <id>                     stop a session's processes (SIGSTOP) until resumed
+  tly resume <id>                    continue a paused session
   tly kill <id>                      hang up a session
   tly rm <id>                        kill and forget a session
   tly shutdown                       stop the host and all sessions
@@ -140,6 +142,11 @@ case "kill", "rm":
     let conn = connection()
     let s = resolve(conn, args.first)
     _ = call(conn, Message(type: cmd == "kill" ? "kill" : "remove", id: s.id))
+
+case "pause", "resume":
+    let conn = connection()
+    let s = resolve(conn, args.first)
+    _ = call(conn, Message(type: cmd == "pause" ? "pause" : "continue", id: s.id))
 
 case "wait":
     let timeout = Double(option("--timeout") ?? "") ?? 0

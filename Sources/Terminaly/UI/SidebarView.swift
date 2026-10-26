@@ -155,6 +155,14 @@ private struct WorkspacePage: View {
         Button("Rename…") { store.renamingSessionID = session.id }
         Button(session.pinned ? "Unpin" : "Pin") { store.togglePinned(session.id) }
         Button("Restart") { store.restart(session.id) }
+        if store.terminals.isRunning(session.id) {
+            if session.status == .paused {
+                Button("Continue") { store.unpause(session.id) }
+            } else {
+                Button("Pause") { store.pause(session.id) }
+            }
+            Button("Stop") { store.stop(session.id) }
+        }
         Divider()
         Button("Split Right With This") {
             store.split(.horizontal)
@@ -321,6 +329,14 @@ private struct SessionMenu: View {
                 store.togglePinned(session.id)
             }
             MenuRow(title: "Restart", icon: "arrow.clockwise") { store.restart(session.id) }
+            if store.terminals.isRunning(session.id) {
+                if session.status == .paused {
+                    MenuRow(title: "Continue", icon: "play") { store.unpause(session.id) }
+                } else {
+                    MenuRow(title: "Pause", icon: "pause") { store.pause(session.id) }
+                }
+                MenuRow(title: "Stop", icon: "stop") { store.stop(session.id) }
+            }
             if session.resumeCommand != nil && !store.terminals.isRunning(session.id) {
                 MenuRow(title: "Resume Conversation", icon: "arrow.uturn.forward") { store.resume(session.id) }
             }

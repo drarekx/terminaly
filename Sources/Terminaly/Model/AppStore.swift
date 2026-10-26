@@ -28,6 +28,7 @@ final class AppStore {
     var worktreeRequestProjectID: UUID?
 
     @ObservationIgnored let terminals = TerminalRegistry()
+    @ObservationIgnored let resources = ResourceMonitor()
     @ObservationIgnored private var saveTask: Task<Void, Never>?
 
     private init() {
@@ -38,6 +39,7 @@ final class AppStore {
             selectedWorkspaceID = ws.id
         }
         terminals.store = self
+        resources.client = terminals.client
         refreshGitProjects()
     }
 
@@ -230,6 +232,23 @@ final class AppStore {
         update(id) { $0.status = .starting; $0.exitCode = nil; $0.permissionPending = false }
         terminals.start(s, cwd: cwd, command: command)
         show(id)
+    }
+
+    /// Stops the session's processes without killing them: no CPU until `unpause`.
+    func pause(_ id: UUID) {
+        guard let s = session(id), s.status != .paused else { return }
+        terminals.setPaused(id, true)
+    }
+
+    func unpause(_ id: UUID) {
+        guard session(id)?.status == .paused else { return }
+        terminals.setPaused(id, false)
+    }
+
+    /// Ends the process (frees its memory) but keeps the session, so it can be restarted or resumed.
+    func stop(_ id: UUID) {
+        terminals.stop(id)
+        update(id) { $0.status = .exited; $0.permissionPending = false }
     }
 
     /// Answers the agent's permission dialog: Enter accepts the highlighted "Yes", Esc declines.

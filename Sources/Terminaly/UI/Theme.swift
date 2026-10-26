@@ -68,6 +68,7 @@ extension SessionStatus {
         case .working: Color(hex: 0x4C8DFF)
         case .idle: Color(hex: 0x3DD68C)
         case .needsInput: Color(hex: 0xFFB020)
+        case .paused: Color(hex: 0xA99BFF)
         case .starting: Color(hex: 0xECECF1, opacity: 0.6)
         case .exited: Color(hex: 0xECECF1, opacity: 0.4)
         }
@@ -79,6 +80,7 @@ extension SessionStatus {
         case .working: Color(hex: 0x7AA7FF)
         case .idle: Color(hex: 0x3DD68C)
         case .needsInput: Color(hex: 0xFFB020)
+        case .paused: Color(hex: 0xBDB2FF)
         case .starting: Color(hex: 0xECECF1, opacity: 0.6)
         case .exited: Color(hex: 0xECECF1, opacity: 0.5)
         }
@@ -90,6 +92,7 @@ extension SessionStatus {
         case .working: Color(hex: 0x4C8DFF, opacity: 0.16)
         case .idle: Color(hex: 0x3DD68C, opacity: 0.16)
         case .needsInput: Color(hex: 0xFFB020, opacity: 0.18)
+        case .paused: Color(hex: 0xA99BFF, opacity: 0.14)
         case .starting, .exited: Color.white.opacity(0.06)
         }
     }

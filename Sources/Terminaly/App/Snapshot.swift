@@ -43,6 +43,12 @@ enum Snapshot {
                 let names = NSApp.windows.filter(\.isVisible).map { String(describing: type(of: $0)) }
                 FileHandle.standardError.write(Data("click: windows=\(names) collapsed=\(store.projects.map { "\($0.name)=\($0.collapsed)" })\n".utf8))
                 capture(to: url.appendingPathComponent("after-click.png"))
+                // Popovers are separate windows the main capture doesn't include.
+                if let pop = NSApp.windows.first(where: { $0.isVisible && String(describing: type(of: $0)).contains("Popover") }),
+                   let v = pop.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) {
+                    v.cacheDisplay(in: v.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: url.appendingPathComponent("popover.png"))
+                }
             }
             if env["TERMINALY_SNAPSHOT_WORKTREE"] != nil {
                 store.selectWorkspace(at: 0)

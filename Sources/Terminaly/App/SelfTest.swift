@@ -5,6 +5,7 @@ import TerminalyKit
 /// 1. a session fires the Claude hook command → status needsInput
 /// 2. a session without hooks → working, then idle after output stops
 /// 3. simulated app relaunch → session still alive in the host, output replayed into a fresh view
+/// …and later steps for panes, permissions, worktrees and pausing (see the numbered prints).
 @MainActor
 enum SelfTest {
     static func run() {
@@ -138,7 +139,31 @@ enum SelfTest {
         print("7 worktree: started=\(wtOK) rejectEmpty=\(rejectedEmpty) removed=\(removed) branchKept=\(branchKept)")
         guard wtOK && rejectedEmpty && removed && branchKept else { return finish(false, "worktree") }
 
+        // 8. Pause: the whole tree (shell + busy child) stops using CPU, and continues afterwards.
+        guard let busy = store.newSession(preset: Preset(label: "Busy", command: "yes > /dev/null"), in: project) else { return finish(false, "create") }
+        try? await Task.sleep(for: .milliseconds(800))
+        store.pause(busy.id)
+        let paused = await waitUntil(3) { store.session(busy.id)?.status == .paused }
+        let t0 = await cpuTime(store, busy.id)
+        try? await Task.sleep(for: .milliseconds(600))
+        let t1 = await cpuTime(store, busy.id)
+        store.unpause(busy.id)
+        let continued = await waitUntil(3) { store.session(busy.id)?.status != .paused }
+        try? await Task.sleep(for: .milliseconds(600))
+        let t2 = await cpuTime(store, busy.id)
+        let still = t1 < t0 + 50_000_000, burning = t2 > t1 + 200_000_000
+        print("8 pause: paused=\(paused) still=\(still) continued=\(continued) burning=\(burning)")
+        guard paused && still && continued && burning else { return finish(false, "pause") }
+
         finish(true, "")
+    }
+
+    private static func cpuTime(_ store: AppStore, _ id: UUID) async -> UInt64 {
+        await withCheckedContinuation { cont in
+            store.terminals.client.request(Message(type: "stats")) { reply in
+                cont.resume(returning: reply.usage?.first { $0.id == id }?.usage.cpuTime ?? 0)
+            }
+        }
     }
 
     private static func workspaceChecks(_ store: AppStore) -> Bool {

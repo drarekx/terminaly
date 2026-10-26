@@ -78,7 +78,7 @@ public struct FrameDecoder {
 
 /// Flat control message. `type` selects the meaning; unused fields stay nil.
 ///
-/// Requests: hello, list, create, attach, detach, resize, send, kill, remove, logs
+/// Requests: hello, list, create, attach, detach, resize, send, kill, remove, logs, pause, continue, stats
 /// Replies echo `reqID`. Events (no reqID): sessions, status, exited, removed
 public struct Message: Codable {
     public var type: String
@@ -102,6 +102,9 @@ public struct Message: Codable {
     public var permission: Bool?
     /// Agent's own conversation id (Claude `session_id`), learned from hooks; used to resume.
     public var agentSessionID: String?
+    /// `stats` reply: usage of each running session's process tree, and of the daemon itself.
+    public var usage: [SessionUsage]?
+    public var hostUsage: ProcessStats.Usage?
 
     public init(type: String, reqID: Int? = nil, id: UUID? = nil) {
         self.type = type
@@ -137,8 +140,18 @@ public struct SessionInfo: Codable, Hashable {
     }
 }
 
+public struct SessionUsage: Codable, Hashable, Sendable {
+    public var id: UUID
+    public var usage: ProcessStats.Usage
+
+    public init(id: UUID, usage: ProcessStats.Usage) {
+        self.id = id
+        self.usage = usage
+    }
+}
+
 public enum TerminalyPaths {
-    public static let protocolVersion = "1"
+    public static let protocolVersion = "2"
 
     public static var stateDir: URL {
         let dir = ProcessInfo.processInfo.environment["TERMINALY_STATE_DIR"].map { URL(fileURLWithPath: $0) }

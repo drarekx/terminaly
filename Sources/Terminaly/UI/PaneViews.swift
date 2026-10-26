@@ -141,6 +141,8 @@ struct PaneView: View {
                         .padding(.top, 6)
                     if s.status == .exited {
                         ExitedBar(session: s)
+                    } else if s.status == .paused {
+                        PausedBar(session: s)
                     } else if s.permissionPending {
                         PermissionBar(session: s)
                     }
@@ -232,6 +234,32 @@ private struct ExitedBar: View {
         .padding(.vertical, 8)
         .background(Theme.elevated)
         .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+    }
+}
+
+/// Shown while the session's processes are stopped. Keystrokes typed meanwhile wait in the terminal.
+private struct PausedBar: View {
+    @Environment(AppStore.self) private var store
+    let session: Session
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "pause.circle.fill").foregroundStyle(SessionStatus.paused.dot)
+            Text("Paused: not using CPU")
+                .font(Theme.Font.bodyMedium)
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+            Spacer()
+            Button("Stop") { store.stop(session.id) }
+                .buttonStyle(SecondaryButtonStyle(compact: true))
+                .help("Ends the process and frees its memory")
+            Button("Continue") { store.unpause(session.id) }
+                .buttonStyle(PrimaryButtonStyle(compact: true))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Theme.elevated)
+        .overlay(alignment: .top) { Rectangle().fill(SessionStatus.paused.dot.opacity(0.5)).frame(height: 1) }
     }
 }
 

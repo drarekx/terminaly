@@ -53,6 +53,7 @@ Ver y controlar las sesiones de otro Mac de la misma red como si fueran locales.
 | | Icono en la barra de menús | Sesiones que piden respuesta y aprobación rápida sin abrir la ventana. | M |
 | | Enviar a varias sesiones | Escribir un prompt una vez y mandarlo a las sesiones seleccionadas. | S |
 | | Grupos y filtros | Filtrar la barra lateral por estado (pide respuesta, trabajando) y buscar sesiones por nombre. | S |
+| ✅ ★ | Pausar sesiones y ver el consumo | Pausar/continuar (SIGSTOP al árbol de procesos) y «Detener» para liberar memoria. En el pie de la barra lateral: sesiones abiertas, memoria y CPU; al pulsar, detalle por sesión con la app y el daemon. | M |
 | | Coste y tokens | Mostrar el coste y los tokens por sesión cuando el agente los reporte en sus hooks. | M |
 
 ## Infraestructura (continua)

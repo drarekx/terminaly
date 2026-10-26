@@ -19,6 +19,8 @@ Dependencias: SwiftTerm (terminal), Sparkle 2 (auto-update). Nada más.
 - Ring buffer de 2 MB por sesión para replay al hacer `attach`.
 - Servidor HTTP de hooks en `127.0.0.1:<puerto aleatorio>` con token por ejecución (`HookServer.swift`). Las sesiones reciben `TERMINALY_SESSION_ID`, `TERMINALY_HOOK_PORT`, `TERMINALY_HOOK_TOKEN`.
 - El estado (`starting/working/idle/needsInput/exited`) se calcula en el daemon (`HostedSession`): por hooks si la sesión los envía, si no por actividad de salida (working mientras sale texto, idle tras 2 s). Solo notifica sesiones con hooks.
+- Pausa (`pause`/`continue`, `tly pause/resume`): SIGSTOP/SIGCONT a todo el árbol de procesos por ppid (los agentes meten ayudantes, p. ej. servidores MCP, en otros grupos), padres antes que hijos al parar y al revés al continuar, para que la shell no vea el job parado y recupere el terminal. Libera CPU, no memoria; para liberar memoria se detiene la sesión y se reanuda con `claude --resume`. Estado `paused`; se ignoran hooks mientras dura.
+- Consumo: `stats` devuelve memoria (`ri_phys_footprint`) y tiempo de CPU de cada árbol de sesión y del daemon (`TerminalyKit/ProcessStats.swift`, libproc). El % de CPU lo calcula la app entre muestras (`Model/ResourceMonitor.swift`), que solo muestrea mientras una vista lo muestra y la app está activa: pie de la barra lateral (10 s) y popover de recursos (2 s).
 - Se cierra solo tras 60 s sin sesiones vivas ni clientes.
 - Socket: `~/Library/Application Support/Terminaly/tly.sock`, permisos 0600, solo acepta peers con el mismo UID.
 
@@ -40,7 +42,7 @@ Frames `[UInt32 BE longitud][UInt8 tipo][payload]`. Tipos: `json` (un `Message` 
 Canvas: https://claude.ai/artifact/NXCTs7pMK3XnPDpKTfmoPY. Tokens en `UI/Theme.swift`; no inventes colores sueltos en las vistas.
 - App siempre oscura (`preferredColorScheme(.dark)`). Fondo `0x0B0C0E`, tarjeta de terminal `0x0F1013`, texto `0xECECF1`.
 - Barra lateral: mezcla sólida del 20 % del color del workspace sobre grafito (`Theme.sidebar`), sin degradados.
-- El color del workspace (`store.accent`) marca foco, selección y botón principal. Los colores de estado (azul/verde/ámbar/gris en `SessionStatus.dot/text/tile`) son solo para agentes.
+- El color del workspace (`store.accent`) marca foco, selección y botón principal. Los colores de estado (azul/verde/ámbar/violeta de pausa/gris en `SessionStatus.dot/text/tile`) son solo para agentes.
 - Tipografía: solo `Theme.Font` (12 pt mínimo para texto legible); texto secundario `Theme.secondaryText`/`tertiaryText`.
 - Botones: `PrimaryButtonStyle` (una acción principal por zona), `SecondaryButtonStyle`, `IconButtonStyle` (+ `.help`/`.accessibilityLabel`). El color del workspace llega por `@Environment(\.workspaceAccent)`: `Color.accentColor` ignora `.tint`. Los popovers viven en otra ventana; `PopoverMenuButton` les pasa el acento.
 - Menús frecuentes = `PopoverMenu` + `MenuRow`/`MenuSectionLabel`/`ColorSwatchRow`/`SymbolGrid`; los menús contextuales (clic derecho) siguen nativos.
@@ -68,10 +70,11 @@ TERMINALY_STATE_DIR=<dir con state.json> TERMINALY_SNAPSHOT_DIR=<out> build/Term
                                               # renderiza la ventana a PNG (un archivo por workspace, máx 3) + menus.png
                                               # extra: TERMINALY_SNAPSHOT_SHELL='cmd' abre una shell real; TERMINALY_SETTINGS_TAB=terminal|general captura Ajustes;
                                               # TERMINALY_CLICK_AT=x,y simula un clic (puntos desde arriba-izquierda) y guarda after-click.png
+                                              # (y popover.png si abre un popover; sale con fondo transparente)
 ./scripts/release.sh 0.3.0 "notas"            # publica release + appcast (ver abajo)
 ```
 
-- **Verifica siempre con `--selftest`** antes de commitear cambios en store, daemon o protocolo. Cubre: workspaces (y migración si `SELFTEST_EXPECT_LEGACY_PROJECTS=N`), hooks → needsInput, heurística working → idle, y reinicio simulado de la app con replay.
+- **Verifica siempre con `--selftest`** antes de commitear cambios en store, daemon o protocolo. Cubre: workspaces (y migración si `SELFTEST_EXPECT_LEGACY_PROJECTS=N`), hooks → needsInput, heurística working → idle, reinicio simulado de la app con replay, y pausa (paso 8: CPU parada y reanudada).
 - Para cambios visuales usa el modo snapshot: no hay permiso de grabación de pantalla, pero la app se pinta a sí misma (`cacheDisplay`). Siembra un `state.json` de prueba en un directorio temporal; nunca uses el estado real del usuario.
 - Usa siempre `TERMINALY_STATE_DIR` en pruebas: si no, tocarías `~/Library/Application Support/Terminaly` (datos reales y el daemon real).
 

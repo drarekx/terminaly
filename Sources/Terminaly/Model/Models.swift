@@ -57,6 +57,7 @@ enum SessionStatus: String, Codable {
     case working       // agent busy / output flowing
     case idle          // agent finished its turn, waiting for a new prompt
     case needsInput    // agent asks for permission or input
+    case paused        // processes stopped (SIGSTOP) by the user
     case exited
 
     var label: String {
@@ -65,6 +66,7 @@ enum SessionStatus: String, Codable {
         case .working: String(localized: "Working")
         case .idle: String(localized: "Ready")
         case .needsInput: String(localized: "Needs input")
+        case .paused: String(localized: "Paused")
         case .exited: String(localized: "Exited")
         }
     }

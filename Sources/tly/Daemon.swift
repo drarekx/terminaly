@@ -182,6 +182,17 @@ final class Daemon {
             s.terminate()
             broadcast(Message(type: "removed", id: id))
 
+        case "pause", "continue":
+            guard let id = msg.id, let s = sessions[id], s.running else { reply.error = "no such session"; break }
+            if msg.type == "pause" { s.pause() } else { s.resume() }
+
+        case "stats":
+            let parents = ProcessStats.parentMap()
+            reply.usage = sessions.values.filter(\.running).map {
+                SessionUsage(id: $0.id, usage: ProcessStats.treeUsage(of: $0.pid, parents: parents))
+            }
+            reply.hostUsage = ProcessStats.usage(of: getpid())
+
         case "logs":
             guard let id = msg.id, let s = sessions[id] else { reply.error = "no such session"; break }
             let text = String(decoding: s.replay, as: UTF8.self)

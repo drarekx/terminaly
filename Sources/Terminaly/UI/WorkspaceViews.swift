@@ -68,12 +68,23 @@ struct WorkspaceTitle: View {
     }
 }
 
-/// Bottom of the sidebar: add project · workspace icon dots · new workspace · settings.
+/// Bottom of the sidebar: resource usage line, then add project · workspace icon dots · new workspace · settings.
 struct SidebarFooter: View {
     @Environment(AppStore.self) var store
     @Namespace var selection
 
     var body: some View {
+        VStack(spacing: 2) {
+            ResourcesButton()
+            buttons
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
+        .background(Theme.sidebar(store.accent).overlay(Color.black.opacity(0.18)))
+        .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+    }
+
+    private var buttons: some View {
         HStack(spacing: 6) {
             Button { store.addProjectWithPanel() } label: {
                 Image(systemName: "folder.badge.plus")
@@ -101,10 +112,6 @@ struct SidebarFooter: View {
                 .help("Settings (⌘,)")
                 .accessibilityLabel("Settings")
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 6)
-        .background(Theme.sidebar(store.accent).overlay(Color.black.opacity(0.18)))
-        .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
     }
 }
 

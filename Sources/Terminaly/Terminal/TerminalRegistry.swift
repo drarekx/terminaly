@@ -207,6 +207,12 @@ final class TerminalRegistry {
         views.removeValue(forKey: id)?.removeFromSuperview()
     }
 
+    /// SIGSTOP / SIGCONT of the session's processes in the host.
+    func setPaused(_ id: UUID, _ paused: Bool) {
+        guard running.contains(id) else { return }
+        client.request(Message(type: paused ? "pause" : "continue", id: id))
+    }
+
     func stopAll() {
         for id in Array(running) { stop(id) }
     }

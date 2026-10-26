@@ -15,6 +15,9 @@ final class HostedSession {
     private(set) var permissionPending = false
     private(set) var agentSessionID: String?
     private(set) var detail: String?
+    private(set) var paused = false
+    private var statusBeforePause = "idle"
+    private var detailBeforePause: String?
     private var master: Int32 = -1
     private var readSource: DispatchSourceRead?
     private var exitSource: DispatchSourceProcess?
@@ -113,6 +116,7 @@ final class HostedSession {
         exitSource?.cancel()
         exitSource = nil
         running = false
+        paused = false
         quietTimer?.cancel()
         setStatus("exited")
         onExit?(self)
@@ -141,6 +145,8 @@ final class HostedSession {
         let pid = self.pid
         kill(-pid, SIGHUP)
         kill(pid, SIGHUP)
+        // A stopped process only acts on SIGHUP once continued.
+        if paused { signalTree(SIGCONT) }
         queue.asyncAfter(deadline: .now() + 2) { [weak self] in
             guard let self, self.running, self.pid == pid else { return }
             kill(-pid, SIGKILL)
@@ -148,10 +154,42 @@ final class HostedSession {
         }
     }
 
+    // MARK: Pause
+
+    /// SIGSTOP to the whole process tree: no CPU until continued, memory stays (macOS compresses it).
+    /// The tree is walked by parent pid because agents put helpers (MCP servers…) in other process groups.
+    func pause() {
+        guard running, !paused else { return }
+        paused = true
+        statusBeforePause = status == "working" ? "idle" : status
+        detailBeforePause = detail
+        quietTimer?.cancel()
+        signalTree(SIGSTOP)
+        setStatus("paused")
+    }
+
+    func resume() {
+        guard running, paused else { return }
+        paused = false
+        signalTree(SIGCONT)
+        // Full-screen agents redraw on a size change.
+        let fg = tcgetpgrp(master)
+        if fg > 0 { kill(-fg, SIGWINCH) }
+        setStatus(statusBeforePause, detail: detailBeforePause, quiet: true)
+    }
+
+    /// Parents are stopped before children (a shell must not see its job stop and take the
+    /// terminal back) and continued after them.
+    private func signalTree(_ sig: Int32) {
+        var pids = ProcessStats.tree(of: pid, parents: ProcessStats.parentMap())
+        if sig == SIGCONT { pids.reverse() }
+        for p in pids { kill(p, sig) }
+    }
+
     // MARK: Status
 
     private func outputActivity() {
-        guard !hookDriven, running else { return }
+        guard !hookDriven, running, !paused else { return }
         if status != "working" { setStatus("working") }
         quietTimer?.cancel()
         let item = DispatchWorkItem { [weak self] in self?.setStatus("idle") }
@@ -160,7 +198,7 @@ final class HostedSession {
     }
 
     func hookEvent(_ event: String, payload: [String: Any]) {
-        guard running else { return }
+        guard running, !paused else { return }
         hookDriven = true
         quietTimer?.cancel()
         if let sid = payload["session_id"] as? String, !sid.isEmpty { agentSessionID = sid }
@@ -188,13 +226,13 @@ final class HostedSession {
         }
     }
 
-    private func setStatus(_ new: String, detail: String? = nil) {
+    private func setStatus(_ new: String, detail: String? = nil, quiet: Bool = false) {
         let old = status
         self.detail = detail
         if old == new && new != "needsInput" { return }
         status = new
         // Notifications only for hook-driven sessions; output heuristics are too noisy.
-        let notify = hookDriven && (new == "needsInput" || (new == "idle" && old == "working"))
+        let notify = !quiet && hookDriven && (new == "needsInput" || (new == "idle" && old == "working"))
         onStatus?(self, detail, notify)
     }
 }
