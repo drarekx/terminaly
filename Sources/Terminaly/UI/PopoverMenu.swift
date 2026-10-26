@@ -22,6 +22,9 @@ struct PopoverMenuButton<Label: View, Content: View>: View {
     var arrowEdge: Edge = .bottom
     var width: CGFloat = 260
     var accent: Color? = nil
+    /// Mirrors whether the popover is open, so a parent that shows this button only on hover can
+    /// keep it alive: removing the button closes its popover as soon as the mouse moves into it.
+    var isOpen: Binding<Bool>? = nil
     @ViewBuilder let label: () -> Label
     @ViewBuilder let content: () -> Content
     @State private var open = false
@@ -32,6 +35,7 @@ struct PopoverMenuButton<Label: View, Content: View>: View {
                 PopoverMenu(width: width, content: content)
                     .environment(\.workspaceAccent, accent ?? inheritedAccent)
             }
+            .onChange(of: open) { _, value in isOpen?.wrappedValue = value }
     }
 }
 

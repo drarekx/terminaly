@@ -179,6 +179,7 @@ private struct ProjectHeader: View {
     @Environment(AppStore.self) private var store
     let project: Project
     @State private var hovering = false
+    @State private var menuOpen = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -202,13 +203,13 @@ private struct ProjectHeader: View {
                 .lineLimit(1)
             Spacer()
             let count = store.sessions(in: project).count
-            if count > 0 && !hovering {
+            if count > 0 && !(hovering || menuOpen) {
                 Text("\(count)")
                     .font(Theme.Font.caption)
                     .foregroundStyle(Theme.tertiaryText)
             }
-            if hovering {
-                PopoverMenuButton(width: 270) {
+            if hovering || menuOpen {
+                PopoverMenuButton(width: 270, isOpen: $menuOpen) {
                     Image(systemName: "ellipsis")
                 } content: {
                     ProjectMenu(project: project)
@@ -277,6 +278,7 @@ private struct SidebarSessionRow: View {
     let session: Session
     let workspace: Workspace
     @State private var hovering = false
+    @State private var menuOpen = false
 
     private var selected: Bool { store.selectedSessionID == session.id }
 
@@ -285,8 +287,8 @@ private struct SidebarSessionRow: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 2)
             .overlay(alignment: .trailing) {
-                if hovering {
-                    PopoverMenuButton(width: 250) {
+                if hovering || menuOpen {
+                    PopoverMenuButton(width: 250, isOpen: $menuOpen) {
                         Image(systemName: "ellipsis")
                     } content: {
                         SessionMenu(session: session)
