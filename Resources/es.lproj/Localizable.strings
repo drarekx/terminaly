@@ -189,3 +189,7 @@
 "%lld running · %lld paused" = "%lld en marcha · %lld en pausa";
 "Pause Idle Sessions (%lld)" = "Pausar sesiones inactivas (%lld)";
 "Pausing stops all CPU use and keeps the session as it is; its memory stays allocated. To free memory, stop the session: Claude conversations can be resumed later." = "Pausar detiene todo el uso de CPU y deja la sesión tal cual; la memoria sigue ocupada. Para liberarla, detén la sesión: las conversaciones de Claude se pueden reanudar después.";
+"New Project" = "Nuevo proyecto";
+"New Project…" = "Nuevo proyecto…";
+"Folder Name:" = "Nombre de la carpeta:";
+"Initialize Git repository" = "Inicializar repositorio Git";

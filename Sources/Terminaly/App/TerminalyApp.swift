@@ -50,6 +50,8 @@ struct AppCommands: Commands {
             .keyboardShortcut("t")
             Button("Add Project…") { store.addProjectWithPanel() }
                 .keyboardShortcut("o")
+            Button("New Project…") { store.newProjectWithPanel() }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
         }
         CommandMenu("Session") {
             Button("Command Palette") { store.showPalette.toggle() }

@@ -37,6 +37,7 @@ struct CommandPaletteView: View {
         all.append(Item(id: "split-v", title: String(localized: "Split Down"), subtitle: String(localized: "Pane"), symbol: "rectangle.split.1x2") { store.split(.vertical) })
         all.append(Item(id: "new-ws", title: String(localized: "New Workspace"), subtitle: String(localized: "Workspace"), symbol: "plus.rectangle.on.rectangle") { store.addWorkspace() })
         all.append(Item(id: "add", title: String(localized: "Add Project…"), subtitle: String(localized: "Project"), symbol: "folder.badge.plus") { store.addProjectWithPanel() })
+        all.append(Item(id: "new-project", title: String(localized: "New Project…"), subtitle: String(localized: "Project"), symbol: "folder.fill.badge.plus") { store.newProjectWithPanel() })
         for s in store.archivedSessions {
             all.append(Item(id: "a\(s.id)", title: String(localized: "Restore \(s.title)"), subtitle: String(localized: "Archived"),
                             symbol: "archivebox") { store.show(s.id) })

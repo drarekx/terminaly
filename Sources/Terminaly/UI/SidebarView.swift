@@ -124,6 +124,8 @@ private struct WorkspacePage: View {
                     } actions: {
                         Button("Add Project…") { store.addProjectWithPanel() }
                             .buttonStyle(PrimaryButtonStyle())
+                        Button("New Project…") { store.newProjectWithPanel() }
+                            .buttonStyle(SecondaryButtonStyle())
                     }
                     .padding(.bottom, 56)
                 }

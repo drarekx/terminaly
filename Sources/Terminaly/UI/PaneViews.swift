@@ -364,8 +364,12 @@ private struct EmptyPaneView: View {
                     .font(Theme.Font.caption)
                     .foregroundStyle(Theme.tertiaryText)
             } else {
-                Button("Add Project…") { store.addProjectWithPanel() }
-                    .buttonStyle(PrimaryButtonStyle())
+                HStack(spacing: 8) {
+                    Button("Add Project…") { store.addProjectWithPanel() }
+                        .buttonStyle(PrimaryButtonStyle())
+                    Button("New Project…") { store.newProjectWithPanel() }
+                        .buttonStyle(SecondaryButtonStyle())
+                }
             }
         }
         .padding(24)

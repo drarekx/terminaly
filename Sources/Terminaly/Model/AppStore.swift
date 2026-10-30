@@ -141,9 +141,51 @@ final class AppStore {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = true
-        panel.prompt = "Add Project"
+        panel.canCreateDirectories = true
+        panel.prompt = String(localized: "Add Project")
         guard panel.runModal() == .OK else { return }
         for url in panel.urls { addProject(at: url) }
+    }
+
+    /// Asks for a name and location, creates the folder and adds it as a project.
+    func newProjectWithPanel() {
+        let panel = NSSavePanel()
+        panel.title = String(localized: "New Project")
+        panel.prompt = String(localized: "Create")
+        panel.nameFieldLabel = String(localized: "Folder Name:")
+        panel.nameFieldStringValue = String(localized: "New Project")
+        panel.canCreateDirectories = true
+        panel.directoryURL = projects.last.map { URL(fileURLWithPath: $0.path).deletingLastPathComponent() }
+        let gitKey = "newProjectGitInit"
+        let gitBox = NSButton(checkboxWithTitle: String(localized: "Initialize Git repository"), target: nil, action: nil)
+        gitBox.state = UserDefaults.standard.object(forKey: gitKey) as? Bool ?? true ? .on : .off
+        let accessory = NSView(frame: NSRect(x: 0, y: 0, width: gitBox.fittingSize.width + 40, height: gitBox.fittingSize.height + 16))
+        gitBox.frame.origin = NSPoint(x: 20, y: 8)
+        accessory.addSubview(gitBox)
+        panel.accessoryView = accessory
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let gitInit = gitBox.state == .on
+        UserDefaults.standard.set(gitInit, forKey: gitKey)
+        do {
+            // The save panel already confirmed replacing an existing item; an existing folder is just reused.
+            var isDir: ObjCBool = false
+            if !FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) || !isDir.boolValue {
+                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            }
+            addProject(at: url)
+            guard gitInit else { return }
+            Task {
+                guard await !Git.isRepository(url.path) else { return }
+                do {
+                    _ = try await Git.run(["init"], in: url.path)
+                    refreshGitProjects()
+                } catch {
+                    NSAlert(error: error).runModal()
+                }
+            }
+        } catch {
+            NSAlert(error: error).runModal()
+        }
     }
 
     @discardableResult
