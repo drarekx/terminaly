@@ -28,8 +28,10 @@ final class WebServer {
         "/icon.svg": ("icon.svg", "image/svg+xml"),
     ]
 
-    /// Daemon requests a browser may send. Creating, killing and removing sessions stay in the app.
-    static let allowedRequests: Set<String> = ["hello", "list", "attach", "detach", "resize", "send", "pause", "continue"]
+    /// Daemon requests a browser may send. `kill` ends the process but keeps the session (it can be started
+    /// again); creating goes through the bridge's own commands, and removing or shutting down stays in the app.
+    static let allowedRequests: Set<String> = ["hello", "list", "attach", "detach", "resize", "send", "pause", "continue",
+                                               "kill", "stats"]
 
     init(config: WebConfig, webRoot: URL) {
         self.config = config

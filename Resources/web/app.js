@@ -24,6 +24,13 @@
       stoppedBar: "This session is stopped", startFresh: "Start Fresh", resumeConversation: "Resume Conversation",
       start: "Start", newSession: "New session", newIn: "New session in", startFailed: "Could not start the session",
       stoppedEmpty: "Start it again to keep working.",
+      open: "Open", restart: "Restart", stop: "Stop", continue: "Continue", moreActions: "More actions",
+      expand: "Expand", collapse: "Collapse",
+      resources: "Resources", resourcesHelp: "Sessions and resource usage", memory: "Memory",
+      oneSession: "1 session", nSessions: "{n} sessions", runningPaused: "{r} running · {p} paused",
+      noRunning: "No running sessions", host: "Session host (tly)",
+      pauseIdle: "Pause idle sessions ({n})",
+      resourcesNote: "Pausing stops all CPU use and keeps the session as it is; its memory stays allocated. To free memory, stop the session: Claude conversations can be resumed later.",
     },
     es: {
       loginHelp: "Pega el token de acceso de Terminaly → Ajustes → Web de tu Mac.",
@@ -36,14 +43,26 @@
       stoppedBar: "Esta sesión está detenida", startFresh: "Empezar de cero", resumeConversation: "Reanudar conversación",
       start: "Iniciar", newSession: "Nueva sesión", newIn: "Nueva sesión en", startFailed: "No se ha podido iniciar la sesión",
       stoppedEmpty: "Iníciala de nuevo para seguir trabajando.",
+      open: "Abrir", restart: "Reiniciar", stop: "Detener", continue: "Continuar", moreActions: "Más acciones",
+      expand: "Desplegar", collapse: "Contraer",
+      resources: "Recursos", resourcesHelp: "Sesiones y consumo de recursos", memory: "Memoria",
+      oneSession: "1 sesión", nSessions: "{n} sesiones", runningPaused: "{r} en marcha · {p} en pausa",
+      noRunning: "No hay sesiones en marcha", host: "Servicio de sesiones (tly)",
+      pauseIdle: "Pausar sesiones inactivas ({n})",
+      resourcesNote: "Pausar detiene todo el uso de CPU y deja la sesión tal cual; la memoria sigue ocupada. Para liberarla, detén la sesión: las conversaciones de Claude se pueden reanudar después.",
     },
   };
   const lang = (navigator.languages || [navigator.language]).some((l) => /^(es|ca|gl|eu)\b/i.test(l)) ? "es" : "en";
-  const t = (key) => strings[lang][key] ?? strings.en[key] ?? key;
+  const t = (key, vars) => {
+    let s = strings[lang][key] ?? strings.en[key] ?? key;
+    for (const k in vars || {}) s = s.replace(`{${k}}`, vars[k]);
+    return s;
+  };
   document.documentElement.lang = lang;
   for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
   for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
   for (const el of document.querySelectorAll("[data-i18n-label]")) el.setAttribute("aria-label", t(el.dataset.i18nLabel));
+  for (const el of document.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);
 
   // MARK: Storage (a private window may refuse it; the page still works for this visit)
 
@@ -93,6 +112,10 @@
   let retryDelay = 1000;
   let retryTimer = null;
   let catalogTimer = null;
+  // Project groups folded on this browser (project id, or "cwd:<folder>" for folders without a project).
+  const collapsed = new Set((() => { try { return JSON.parse(store.get("collapsed") || "[]"); } catch { return []; } })());
+  // Restart of a running session: stop it, then start it once the daemon reports the exit.
+  const restartAfterExit = new Map(); // id → resume?
 
   // Tokens can arrive in the link (#token=…) so the Mac can show one URL to open; never keep it in the address bar.
   const hashToken = new URLSearchParams(location.hash.slice(1)).get("token");
@@ -204,6 +227,7 @@
           render();
           if (current) open(current);
         });
+        pollStats();
         break;
       case "catalog":
         catalog = msg.catalog || catalog;
@@ -246,7 +270,15 @@
         s.status = msg.status;
         s.permission = msg.permission || false;
         if (msg.exitCode != null) s.exitCode = msg.exitCode;
-        if (msg.status === "exited") { s.running = false; refreshCatalogSoon(); }
+        if (msg.status === "exited") {
+          s.running = false;
+          refreshCatalogSoon();
+          if (restartAfterExit.has(msg.id)) {
+            const resume = restartAfterExit.get(msg.id);
+            restartAfterExit.delete(msg.id);
+            start(msg.id, resume);
+          }
+        }
         break;
       }
       case "removed":
@@ -338,6 +370,23 @@
     command({ type: "new", projectID, presetID, ...gridSize() });
   }
 
+  /// Ends the process but keeps the session, like "Stop" in the app: it can be started or resumed later.
+  function stop(id) {
+    restartAfterExit.delete(id);
+    if (isRunning(id)) send({ type: "kill", id });
+  }
+
+  function restart(id, resume) {
+    if (!isRunning(id)) return start(id, resume);
+    restartAfterExit.set(id, resume);
+    send({ type: "kill", id });
+  }
+
+  function togglePause(id) {
+    const s = live.get(id);
+    if (s?.running) send({ type: s.status === "paused" ? "continue" : "pause", id }, () => setTimeout(pollStats, 300));
+  }
+
   // MARK: Rendering
 
   function el(tag, cls, text) {
@@ -348,6 +397,10 @@
   }
 
   const plusIcon = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  const chevronIcon = '<svg class="chevron" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const moreIcon = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="3.5" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="12.5" cy="8" r="1.4" fill="currentColor"/></svg>';
+  const pauseIcon = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="4" y="3" width="2.6" height="10" rx="0.8" fill="currentColor"/><rect x="9.4" y="3" width="2.6" height="10" rx="0.8" fill="currentColor"/></svg>';
+  const playIcon = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.4-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5z" fill="currentColor"/></svg>';
 
   function renderWorkspaces() {
     const sel = $("workspace");
@@ -385,18 +438,45 @@
 
     if (groups.length === 0) list.append(el("p", "none", t("noSessions")));
     for (const g of groups) {
+      const key = g.id || `cwd:${g.items[0]?.cwd || g.name}`;
+      const folded = collapsed.has(key);
       const head = el("div", "group");
-      head.append(el("span", "group-name", g.name));
+      const toggle = el("button", "group-toggle");
+      toggle.setAttribute("aria-expanded", String(!folded));
+      toggle.title = folded ? t("expand") : t("collapse");
+      toggle.innerHTML = chevronIcon;
+      toggle.append(el("span", "group-name", g.name));
+      if (folded) {
+        // Folded: still show how many are running and whether one is waiting for you.
+        const running = g.items.filter((v) => v.running);
+        if (running.length) {
+          const count = el("span", "group-count");
+          if (running.some((v) => v.status === "needsInput")) {
+            const d = el("span", "dot");
+            d.dataset.status = "needsInput";
+            count.append(d);
+          }
+          count.append(String(running.length));
+          toggle.append(count);
+        }
+      }
+      toggle.onclick = () => {
+        if (folded) collapsed.delete(key); else collapsed.add(key);
+        store.set("collapsed", JSON.stringify([...collapsed]));
+        render();
+      };
+      head.append(toggle);
       if (g.id && catalog.presets.length) {
         const add = el("button", "icon-btn");
         add.innerHTML = plusIcon;
         add.setAttribute("aria-label", `${t("newIn")} ${g.name}`);
         add.title = t("newSession");
         add.setAttribute("aria-haspopup", "menu");
-        add.onclick = (ev) => { ev.stopPropagation(); openMenu(add, g); };
+        add.onclick = (ev) => { ev.stopPropagation(); openPresetMenu(add, g); };
         head.append(add);
       }
       list.append(head);
+      if (folded) continue;
       // Running first, then stopped; each by creation.
       g.items.sort((a, b) => (b.running - a.running) || (a.createdAt - b.createdAt));
       for (const v of g.items) list.append(row(v));
@@ -422,13 +502,19 @@
       $("empty").hidden = false;
     }
     document.title = v ? `${v.title} — Terminaly` : "Terminaly";
+    renderUsage();
   }
 
   function row(v) {
+    const wrap = el("div", "row-wrap");
     const r = el("button", "row");
     r.setAttribute("aria-current", v.id === current ? "true" : "false");
     r.dataset.stopped = String(!v.running);
     r.onclick = () => select(v.id);
+    r.oncontextmenu = (ev) => {
+      ev.preventDefault();
+      openSessionMenu(v.id, { x: ev.clientX, y: ev.clientY });
+    };
     const dot = el("span", "dot");
     dot.dataset.status = v.running ? v.status : "exited";
     const text = el("span", "row-text");
@@ -437,38 +523,208 @@
     sub.dataset.status = v.status;
     text.append(sub);
     r.append(dot, text);
-    return r;
+
+    const more = el("button", "icon-btn more");
+    more.innerHTML = moreIcon;
+    more.setAttribute("aria-label", `${t("moreActions")}: ${v.title}`);
+    more.title = t("moreActions");
+    more.setAttribute("aria-haspopup", "menu");
+    more.setAttribute("aria-expanded", String(menuOwner === `s:${v.id}`));
+    more.onclick = (ev) => { ev.stopPropagation(); openSessionMenu(v.id, more); };
+    wrap.append(r, more);
+    return wrap;
   }
 
-  // MARK: New-session menu
+  // MARK: Menus
 
-  function openMenu(anchor, group) {
+  /// The same actions as the session menu in the app, minus the ones that only make sense there.
+  function sessionActions(id) {
+    const v = view(id);
+    const items = [];
+    if (id !== current) items.push({ label: t("open"), run: () => select(id) });
+    if (v.running) {
+      items.push({ label: v.status === "paused" ? t("continue") : t("pause"), run: () => togglePause(id) });
+      if (v.projectID) items.push({ label: t("restart"), run: () => restart(id, false) });
+      items.push("-", { label: t("stop"), danger: true, run: () => stop(id) });
+    } else if (v.projectID) {
+      if (v.resumable) items.push({ label: t("resumeConversation"), run: () => { select(id); start(id, true); } });
+      items.push({ label: v.resumable ? t("startFresh") : t("start"), run: () => { select(id); start(id, false); } });
+    }
+    return items;
+  }
+
+  let menuOwner = null;
+
+  /// `at` is an element (menu below it) or a point (context menu).
+  function showMenu(owner, label, items, at) {
     const menu = $("menu");
-    if (!menu.hidden && menu.dataset.project === group.id) return closeMenu();
-    menu.dataset.project = group.id;
-    menu.replaceChildren(el("div", "menu-label", `${t("newIn")} ${group.name}`));
-    for (const p of catalog.presets) {
-      const b = el("button", null, p.label || t("shell"));
+    if (!menu.hidden && menuOwner === owner && at instanceof Element) return closeMenu();
+    menuOwner = owner;
+    menu.replaceChildren();
+    if (label) menu.append(el("div", "menu-label", label));
+    for (const item of items) {
+      if (item === "-") { menu.append(el("hr")); continue; }
+      const b = el("button", item.danger ? "danger" : null, item.label);
       b.setAttribute("role", "menuitem");
-      if (p.command) b.append(el("span", "cmd", p.command));
-      b.onclick = () => newSession(group.id, p.id);
+      if (item.detail) b.append(el("span", "cmd", item.detail));
+      b.onclick = (ev) => { ev.stopPropagation(); closeMenu(); item.run(); };
       menu.append(b);
     }
     menu.hidden = false;
-    const r = anchor.getBoundingClientRect();
     const w = menu.offsetWidth, h = menu.offsetHeight;
-    menu.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
-    menu.style.top = `${r.bottom + h + 8 > innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4}px`;
+    let x, y;
+    if (at instanceof Element) {
+      const r = at.getBoundingClientRect();
+      x = r.left;
+      y = r.bottom + h + 8 > innerHeight ? r.top - h - 4 : r.bottom + 4;
+      at.setAttribute("aria-expanded", "true");
+    } else {
+      x = at.x;
+      y = at.y + h + 8 > innerHeight ? at.y - h : at.y;
+    }
+    menu.style.left = `${Math.max(8, Math.min(x, innerWidth - w - 8))}px`;
+    menu.style.top = `${Math.max(8, y)}px`;
     menu.querySelector("button")?.focus();
+  }
+
+  function openSessionMenu(id, at) {
+    const items = sessionActions(id);
+    if (items.length) showMenu(`s:${id}`, view(id).title, items, at);
+  }
+
+  function openPresetMenu(anchor, group) {
+    showMenu(`p:${group.id}`, `${t("newIn")} ${group.name}`,
+      catalog.presets.map((p) => ({ label: p.label || t("shell"), detail: p.command, run: () => newSession(group.id, p.id) })),
+      anchor);
   }
 
   function closeMenu() {
     $("menu").hidden = true;
-    delete $("menu").dataset.project;
+    menuOwner = null;
+    for (const b of document.querySelectorAll('[aria-haspopup="menu"][aria-expanded="true"]')) b.setAttribute("aria-expanded", "false");
   }
 
-  document.addEventListener("click", (ev) => { if (!$("menu").contains(ev.target)) closeMenu(); });
-  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !$("menu").hidden) { closeMenu(); ev.preventDefault(); } });
+  document.addEventListener("click", (ev) => {
+    if (!$("menu").contains(ev.target)) closeMenu();
+    if (!$("resources").hidden && !$("resources").contains(ev.target) && !$("usage-btn").contains(ev.target)) toggleResources(false);
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape") return;
+    if (!$("menu").hidden) { closeMenu(); ev.preventDefault(); }
+    else if (!$("resources").hidden) { toggleResources(false); ev.preventDefault(); }
+  });
+  // Scrolling the list moves the rows away from a menu opened on them.
+  $("sessions").addEventListener("scroll", closeMenu, { passive: true });
+
+  // MARK: Resources
+
+  let usage = new Map();   // id → { memory, cpu, processes }
+  let hostUsage = null;
+  const lastCPU = new Map(); // id or "host" → { time (ns), at (ms) }
+  let statsTimer = null;
+
+  const resourcesOpen = () => !$("resources").hidden;
+  const nf = (digits) => new Intl.NumberFormat(lang, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  function fmtMemory(bytes) {
+    const mb = bytes / 1048576;
+    return mb >= 1024 ? `${nf(1).format(mb / 1024)} GB` : `${nf(0).format(mb)} MB`;
+  }
+  const fmtCPU = (cpu) => (cpu == null ? "–" : `${Math.round(cpu)} %`);
+
+  /// CPU % from the change in CPU time between two samples, like ResourceMonitor in the app.
+  function sample(key, u, now) {
+    const prev = lastCPU.get(key);
+    let cpu = null;
+    if (prev && now - prev.at > 100) cpu = Math.max(0, u.cpuTime - prev.time) / 1e6 / (now - prev.at) * 100;
+    lastCPU.set(key, { time: u.cpuTime, at: now });
+    return { memory: u.memory, cpu, processes: u.processes };
+  }
+
+  /// Samples only while the page is visible: every 10 s for the footer, every 2 s with the panel open.
+  function pollStats() {
+    clearTimeout(statsTimer);
+    if (!isOpen() || document.visibilityState !== "visible") return;
+    send({ type: "stats" }, (r) => {
+      if (r.error) return;
+      const now = performance.now();
+      const next = new Map();
+      const seen = new Set(["host"]);
+      for (const e of r.usage || []) { next.set(e.id, sample(e.id, e.usage, now)); seen.add(e.id); }
+      for (const k of lastCPU.keys()) if (!seen.has(k)) lastCPU.delete(k);
+      usage = next;
+      hostUsage = r.hostUsage ? sample("host", r.hostUsage, now) : null;
+      renderUsage();
+    });
+    statsTimer = setTimeout(pollStats, resourcesOpen() ? 2000 : 10000);
+  }
+
+  function totals() {
+    let memory = hostUsage?.memory || 0, cpu = hostUsage?.cpu ?? null;
+    for (const u of usage.values()) {
+      memory += u.memory;
+      if (u.cpu != null) cpu = (cpu || 0) + u.cpu;
+    }
+    return { memory, cpu };
+  }
+
+  function renderUsage() {
+    const running = [...live.values()].filter((s) => s.running);
+    const { memory, cpu } = totals();
+    const n = running.length;
+    $("usage-summary").textContent =
+      `${n === 1 ? t("oneSession") : t("nSessions", { n })} · ${fmtMemory(memory)} · CPU ${fmtCPU(cpu)}`;
+    if (!resourcesOpen()) return;
+
+    const paused = running.filter((s) => s.status === "paused").length;
+    $("resources-count").textContent = t("runningPaused", { r: n, p: paused });
+    $("total-mem").textContent = fmtMemory(memory);
+    $("total-cpu").textContent = fmtCPU(cpu);
+
+    const rows = $("usage-rows");
+    rows.replaceChildren();
+    if (!n) rows.append(el("p", "none", t("noRunning")));
+    running.sort((a, b) => (usage.get(b.id)?.memory || 0) - (usage.get(a.id)?.memory || 0));
+    for (const s of running) {
+      const v = view(s.id);
+      const u = usage.get(s.id);
+      const r = el("div", "usage-row");
+      r.dataset.clickable = "";
+      r.onclick = () => { toggleResources(false); select(s.id); };
+      const dot = el("span", "dot");
+      dot.dataset.status = v.status;
+      const text = el("span", "row-text");
+      text.append(el("span", "row-title", v.title), el("span", "row-sub", projectName(v)));
+      const pause = el("button", "icon-btn");
+      pause.innerHTML = v.status === "paused" ? playIcon : pauseIcon;
+      const label = v.status === "paused" ? t("continue") : t("pause");
+      pause.setAttribute("aria-label", `${label}: ${v.title}`);
+      pause.title = label;
+      pause.onclick = (ev) => { ev.stopPropagation(); togglePause(s.id); };
+      r.append(dot, text, el("span", "num mem", u ? fmtMemory(u.memory) : "–"), el("span", "num cpu", fmtCPU(u?.cpu)), pause);
+      rows.append(r);
+    }
+    rows.append(el("hr", "usage-sep"));
+    const h = el("div", "usage-row");
+    const hostText = el("span", "row-text");
+    hostText.append(el("span", "row-title", t("host")));
+    h.append(el("span"), hostText, el("span", "num mem", hostUsage ? fmtMemory(hostUsage.memory) : "–"),
+      el("span", "num cpu", fmtCPU(hostUsage?.cpu)), el("span"));
+    rows.append(h);
+
+    const idle = running.filter((s) => s.status === "idle");
+    const pi = $("pause-idle");
+    pi.hidden = !idle.length;
+    pi.textContent = t("pauseIdle", { n: idle.length });
+    pi.onclick = () => { for (const s of idle) togglePause(s.id); };
+  }
+
+  function toggleResources(show = !resourcesOpen()) {
+    $("resources").hidden = !show;
+    $("usage-btn").setAttribute("aria-expanded", String(show));
+    if (show) { closeMenu(); renderUsage(); }
+    pollStats();
+  }
+  $("usage-btn").onclick = (ev) => { ev.stopPropagation(); toggleResources(); };
 
   // MARK: UI
 
@@ -525,17 +781,16 @@
   $("deny").onclick = () => { sendInput(encoder.encode("\x1b")); term.focus(); };
   $("resume").onclick = () => current && start(current, true);
   $("restart").onclick = () => current && start(current, false);
-  $("pause").onclick = () => {
-    const s = current && live.get(current);
-    if (s) send({ type: s.status === "paused" ? "continue" : "pause", id: s.id });
-  };
+  $("pause").onclick = () => current && togglePause(current);
   const keys = { esc: "\x1b", tab: "\t", up: "\x1b[A", down: "\x1b[B", ctrlc: "\x03", enter: "\r" };
   for (const b of $("keys").querySelectorAll("button")) {
     b.onclick = () => sendInput(encoder.encode(keys[b.dataset.key]));
   }
   // Back from a hidden tab: the socket may have died while the phone slept.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && token && !ws) connect();
+    if (document.visibilityState !== "visible") return;
+    if (token && !ws) connect();
+    else pollStats();
   });
 
   if (token) connect();
