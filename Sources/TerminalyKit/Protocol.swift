@@ -32,6 +32,9 @@ public struct Frame {
         return out
     }
 
+    /// The frame re-encoded for the wire.
+    public var bytes: [UInt8] { Frame.encode(kind, payload) }
+
     public var message: Message? {
         guard kind == .json else { return nil }
         return try? JSONDecoder().decode(Message.self, from: Data(payload))

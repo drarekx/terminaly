@@ -20,6 +20,7 @@ cp "$BIN_DIR/tly" "$APP/Contents/MacOS/tly"
 ditto "$BIN_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 cp -R Resources/*.lproj "$APP/Contents/Resources/"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+ditto Resources/web "$APP/Contents/Resources/web"   # browser UI served by `tly web`
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

@@ -29,7 +29,9 @@ Hecho: menús en popover, botones legibles, escala tipográfica, interfaz en esp
 
 ## v0.5 — Sesiones en la red local ★
 
-Ver y controlar las sesiones de otro Mac de la misma red como si fueran locales.
+✅ ★ **Acceso desde el navegador** (`tly web`): Ajustes → Web abre las sesiones de este Mac a cualquier navegador de la red local o de la VPN, con token. Lista de sesiones con estado, terminal en directo (xterm.js), Permitir/Denegar, pausa y teclas rápidas en el móvil. Sin crear ni cerrar sesiones desde la web.
+
+Pendiente: ver y controlar las sesiones de otro Mac de la misma red como si fueran locales, dentro de la app.
 
 **Cómo funcionaría**
 - **Activación manual en cada Mac, desactivada por defecto**: Ajustes → «Compartir este Mac». El daemon `tly` abre entonces un puerto TCP; si está desactivado, no escucha en red.

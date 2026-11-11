@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Terminaly (16–32 px)</title>
+  <!-- Simplified for tiny sizes: no shadow or glow, larger dots, brighter rows. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#17181D"/>
+  <path d="M 252 398 L 392 512 L 252 626" fill="none" stroke="#F4F4F8" stroke-width="72" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="452" y="380" width="332" height="64" rx="32" fill="#FFFFFF" fill-opacity="0.14"/>
+  <circle cx="486" cy="412" r="24" fill="#4C8DFF"/>
+  <rect x="452" y="480" width="262" height="64" rx="32" fill="#FFFFFF" fill-opacity="0.14"/>
+  <circle cx="486" cy="512" r="24" fill="#FFB020"/>
+  <rect x="452" y="580" width="300" height="64" rx="32" fill="#FFFFFF" fill-opacity="0.14"/>
+  <circle cx="486" cy="612" r="24" fill="#3DD68C"/>
+</svg>

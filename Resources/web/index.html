@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0B0C0E">
+<title>Terminaly</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="xterm.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="login" class="login" hidden>
+  <form id="login-form" class="login-card">
+    <img src="icon.svg" alt="" width="48" height="48">
+    <h1>Terminaly</h1>
+    <p data-i18n="loginHelp">Paste the access token from Terminaly → Settings → Web on your Mac.</p>
+    <input id="token" type="password" autocomplete="current-password" spellcheck="false" data-i18n-placeholder="tokenPlaceholder" placeholder="Access token" required>
+    <p id="login-error" class="error" hidden></p>
+    <button type="submit" class="primary" data-i18n="connect">Connect</button>
+  </form>
+</div>
+
+<div id="app" class="app" hidden>
+  <aside id="sidebar" class="sidebar">
+    <header class="sidebar-head">
+      <img src="icon.svg" alt="" width="22" height="22">
+      <span class="brand">Terminaly</span>
+      <span id="conn" class="conn" data-state="connecting"></span>
+    </header>
+    <nav id="sessions" class="sessions" aria-label="Sessions"></nav>
+    <footer class="sidebar-foot">
+      <button id="logout" class="link" data-i18n="logout">Sign out</button>
+    </footer>
+  </aside>
+
+  <main id="main" class="main">
+    <header class="pane-head">
+      <button id="back" class="icon-btn back" aria-label="Sessions" data-i18n-label="sessions">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span id="pane-dot" class="dot"></span>
+      <div class="pane-title">
+        <span id="pane-name"></span>
+        <span id="pane-status" class="pane-status"></span>
+      </div>
+      <button id="pause" class="secondary" hidden></button>
+    </header>
+    <div id="empty" class="empty" data-i18n="empty">Pick a session.</div>
+    <div id="terminal-card" class="terminal-card" hidden>
+      <div id="terminal" class="terminal"></div>
+    </div>
+    <div id="permission" class="permission" hidden>
+      <span data-i18n="permission">Needs your permission</span>
+      <span class="spacer"></span>
+      <button id="deny" class="secondary" data-i18n="deny">Deny</button>
+      <button id="allow" class="primary" data-i18n="allow">Allow</button>
+    </div>
+    <div id="keys" class="keys" hidden>
+      <button data-key="esc">Esc</button>
+      <button data-key="tab">Tab</button>
+      <button data-key="up" aria-label="Up">↑</button>
+      <button data-key="down" aria-label="Down">↓</button>
+      <button data-key="ctrlc">Ctrl‑C</button>
+      <button data-key="enter" aria-label="Enter">⏎</button>
+    </div>
+  </main>
+</div>
+
+<script src="xterm.js"></script>
+<script src="addon-fit.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

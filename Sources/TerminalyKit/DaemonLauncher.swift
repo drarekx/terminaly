@@ -16,6 +16,12 @@ public enum DaemonLauncher {
 
     /// New session (setsid) so the daemon outlives the app and its terminal; output to tly.log.
     static func spawnDaemon(tlyPath: String) throws {
+        try spawnDetached(tlyPath: tlyPath, arguments: ["daemon"], log: TerminalyPaths.log)
+    }
+
+    /// Runs `tlyPath arguments…` in its own session with stdin from /dev/null and output appended to `log`.
+    @discardableResult
+    public static func spawnDetached(tlyPath: String, arguments: [String], log: String) throws -> pid_t {
         var attr: posix_spawnattr_t?
         posix_spawnattr_init(&attr)
         defer { posix_spawnattr_destroy(&attr) }
@@ -25,10 +31,10 @@ public enum DaemonLauncher {
         posix_spawn_file_actions_init(&actions)
         defer { posix_spawn_file_actions_destroy(&actions) }
         posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0)
-        posix_spawn_file_actions_addopen(&actions, 1, TerminalyPaths.log, O_WRONLY | O_CREAT | O_APPEND, 0o600)
+        posix_spawn_file_actions_addopen(&actions, 1, log, O_WRONLY | O_CREAT | O_APPEND, 0o600)
         posix_spawn_file_actions_adddup2(&actions, 1, 2)
 
-        let args = [tlyPath, "daemon"]
+        let args = [tlyPath] + arguments
         let cArgs = args.map { strdup($0) } + [nil]
         defer { cArgs.forEach { free($0) } }
         var pid: pid_t = 0
@@ -37,6 +43,7 @@ public enum DaemonLauncher {
                         UnsafeMutablePointer(mutating: argv.baseAddress!), environ)
         }
         guard rc == 0 else { throw UnixSocket.SocketError.sys("posix_spawn \(tlyPath)", rc) }
+        return pid
     }
 }
 

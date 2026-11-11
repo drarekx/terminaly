@@ -239,6 +239,14 @@ final class TerminalRegistry {
         }
     }
 
+    /// A browser attached through `tly web` may have resized the PTY; back on the Mac, the visible
+    /// terminals take their size back.
+    func reassertSizes() {
+        for (id, v) in views where v.window != nil {
+            resize(id, cols: v.gridSize.cols, rows: v.gridSize.rows)
+        }
+    }
+
     func applyPrefs() {
         let theme = TerminalTheme.current
         let font = TerminalFont.make(family: TerminalPrefs.fontFamily, size: TerminalPrefs.fontSize)

@@ -68,7 +68,7 @@ final class HookServer: @unchecked Sendable {
 }
 
 /// Minimal HTTP/1.1 request parser; returns nil until headers and full body have arrived.
-private struct HTTPRequest {
+struct HTTPRequest {
     let method: String
     let path: String
     let headers: [String: String]

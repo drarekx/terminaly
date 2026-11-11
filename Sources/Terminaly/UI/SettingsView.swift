@@ -8,6 +8,7 @@ struct SettingsView: View {
             PresetsSettings().tabItem { Label("Presets", systemImage: "list.bullet") }.tag("presets")
             IntegrationsSettings().tabItem { Label("Agents", systemImage: "sparkles") }.tag("agents")
             TerminalSettings().tabItem { Label("Terminal", systemImage: "terminal") }.tag("terminal")
+            WebSettings().tabItem { Label("Web", systemImage: "globe") }.tag("web")
             GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }.tag("general")
         }
         .frame(width: 600, height: 520)
@@ -223,5 +224,122 @@ private struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+private struct WebSettings: View {
+    @State private var web = WebAccess.shared
+    @State private var port = ""
+    @State private var showToken = false
+    @State private var copied: String?
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Open sessions from a browser on the local network", isOn: Binding(
+                    get: { web.config.enabled },
+                    set: { web.setEnabled($0) }
+                ))
+                LabeledContent("Status") {
+                    if web.config.enabled && web.isRunning {
+                        Text("Running").foregroundStyle(SessionStatus.idle.dot)
+                    } else {
+                        Text("Off").foregroundStyle(Theme.secondaryText)
+                    }
+                }
+                if let error = web.error {
+                    Text(error).font(Theme.Font.caption).foregroundStyle(.red)
+                }
+                Text("Anyone with the token can type into your sessions and approve permissions. The connection is not encrypted: use it only on your own network or through your VPN, and never forward the port to the internet.")
+                    .font(Theme.Font.caption).foregroundStyle(Theme.secondaryText)
+            }
+
+            if web.config.enabled {
+                Section("Address") {
+                    ForEach(addresses, id: \.self) { url in
+                        HStack {
+                            Text(url).font(Theme.Font.mono).textSelection(.enabled)
+                            Spacer()
+                            copyButton(url, key: url)
+                        }
+                    }
+                    HStack {
+                        Text("Port")
+                        TextField("", text: $port)
+                            .frame(width: 80)
+                            .onSubmit { applyPort() }
+                        Button("Apply") { applyPort() }
+                            .buttonStyle(SecondaryButtonStyle(compact: true))
+                            .disabled(Int(port) == web.config.port || !(1024...65535).contains(Int(port) ?? 0))
+                    }
+                }
+
+                Section("Access token") {
+                    HStack {
+                        Text(showToken ? web.config.token : String(repeating: "•", count: 24))
+                            .font(Theme.Font.mono)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                        Spacer()
+                        Button {
+                            showToken.toggle()
+                        } label: {
+                            Image(systemName: showToken ? "eye.slash" : "eye")
+                        }
+                        .buttonStyle(IconButtonStyle())
+                        .help(showToken ? LocalizedStringKey("Hide token") : LocalizedStringKey("Show token"))
+                        .accessibilityLabel(showToken ? LocalizedStringKey("Hide token") : LocalizedStringKey("Show token"))
+                        copyButton(web.config.token, key: "token")
+                    }
+                    HStack {
+                        if let first = addresses.first {
+                            Button("Copy Link with Token") {
+                                copy("\(first)/#token=\(web.config.token)", key: "link")
+                            }
+                            .buttonStyle(SecondaryButtonStyle(compact: true))
+                            if copied == "link" {
+                                Text("Copied").font(Theme.Font.caption).foregroundStyle(Theme.secondaryText)
+                            }
+                        }
+                        Spacer()
+                        Button("New Token") { web.regenerateToken() }
+                            .buttonStyle(SecondaryButtonStyle(compact: true))
+                    }
+                    Text("The link signs the browser in without typing the token. A new token signs out every browser.")
+                        .font(Theme.Font.caption).foregroundStyle(Theme.secondaryText)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear { port = String(web.config.port) }
+    }
+
+    private var addresses: [String] {
+        (web.bonjourURL.map { [$0] } ?? []) + web.urls
+    }
+
+    private func applyPort() {
+        guard let p = Int(port) else { return }
+        web.setPort(p)
+        port = String(web.config.port)
+    }
+
+    private func copyButton(_ value: String, key: String) -> some View {
+        Button {
+            copy(value, key: key)
+        } label: {
+            Image(systemName: copied == key ? "checkmark" : "doc.on.doc")
+        }
+        .buttonStyle(IconButtonStyle())
+        .help("Copy")
+        .accessibilityLabel("Copy")
+    }
+
+    private func copy(_ value: String, key: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+        copied = key
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { if copied == key { copied = nil } }
     }
 }

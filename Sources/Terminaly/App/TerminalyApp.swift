@@ -108,6 +108,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        MainActor.assumeIsolated { AppStore.shared.terminals.reassertSizes() }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         _ = MainActor.assumeIsolated { Updater.shared }  // starts scheduled update checks
@@ -117,6 +121,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return
         }
         MainActor.assumeIsolated { Snapshot.runIfRequested() }
+        if ProcessInfo.processInfo.environment["TERMINALY_SNAPSHOT_DIR"] == nil {
+            MainActor.assumeIsolated { WebAccess.shared.startIfEnabled() }
+        }
         if Notifier.available {
             UNUserNotificationCenter.current().delegate = self
             Notifier.requestAuthorization()

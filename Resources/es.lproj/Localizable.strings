@@ -193,3 +193,23 @@
 "New Project…" = "Nuevo proyecto…";
 "Folder Name:" = "Nombre de la carpeta:";
 "Initialize Git repository" = "Inicializar repositorio Git";
+
+/* Settings → Web */
+"Web" = "Web";
+"Open sessions from a browser on the local network" = "Abrir las sesiones desde un navegador de la red local";
+"Status" = "Estado";
+"Running" = "Activo";
+"Off" = "Desactivado";
+"Anyone with the token can type into your sessions and approve permissions. The connection is not encrypted: use it only on your own network or through your VPN, and never forward the port to the internet." = "Quien tenga el token puede escribir en tus sesiones y aprobar permisos. La conexión no va cifrada: úsala solo en tu red o a través de tu VPN, y nunca abras el puerto a internet.";
+"Address" = "Dirección";
+"Port" = "Puerto";
+"Apply" = "Aplicar";
+"Access token" = "Token de acceso";
+"Hide token" = "Ocultar token";
+"Show token" = "Mostrar token";
+"Copy" = "Copiar";
+"Copied" = "Copiado";
+"Copy Link with Token" = "Copiar enlace con token";
+"New Token" = "Nuevo token";
+"The link signs the browser in without typing the token. A new token signs out every browser." = "El enlace inicia sesión en el navegador sin escribir el token. Un token nuevo cierra la sesión de todos los navegadores.";
+"The web server did not start. Is port %@ in use?" = "El servidor web no ha arrancado. ¿Está ocupado el puerto %@?";

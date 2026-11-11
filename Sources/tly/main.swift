@@ -6,6 +6,7 @@ let usage = """
 tly — Terminaly session host
 
   tly daemon                         run the session host (started automatically)
+  tly web                            serve the browser UI on the local network (enable it in Terminaly settings)
   tly ls [--json]                    list sessions
   tly new [--cwd DIR] [--command CMD] [--json]
   tly send <id> <text...> [--enter]  type text into a session
@@ -90,6 +91,11 @@ args.removeFirst()
 switch cmd {
 case "daemon":
     Daemon().run()
+
+case "web":
+    guard let config = WebConfig.load(), config.enabled else { fail("web access is off; turn it on in Terminaly → Settings → Web") }
+    guard let root = WebServer.findWebRoot() else { fail("web files not found (Resources/web)") }
+    WebServer(config: config, webRoot: root).run()
 
 case "ls":
     let json = flag("--json")

@@ -9,7 +9,7 @@ SwiftPM, macOS 14+, Swift 6 toolchain en modo de lenguaje 5 (`swiftLanguageMode(
 | Target | Qué es |
 |---|---|
 | `Terminaly` | App SwiftUI. Renderiza terminales (SwiftTerm `TerminalView`), no es dueña de ningún proceso. |
-| `tly` | Daemon de sesiones (`tly daemon`, se arranca solo) + CLI (`tly ls/new/send/logs/attach/wait/kill/rm/shutdown`). |
+| `tly` | Daemon de sesiones (`tly daemon`, se arranca solo) + CLI (`tly ls/new/send/logs/attach/wait/kill/rm/shutdown`) + puente web (`tly web`). |
 | `TerminalyKit` | Protocolo compartido: framing, `Message`, sockets Unix, lanzador del daemon, rutas. |
 
 Dependencias: SwiftTerm (terminal), Sparkle 2 (auto-update). Nada más.
@@ -23,6 +23,15 @@ Dependencias: SwiftTerm (terminal), Sparkle 2 (auto-update). Nada más.
 - Consumo: `stats` devuelve memoria (`ri_phys_footprint`) y tiempo de CPU de cada árbol de sesión y del daemon (`TerminalyKit/ProcessStats.swift`, libproc). El % de CPU lo calcula la app entre muestras (`Model/ResourceMonitor.swift`), que solo muestrea mientras una vista lo muestra y la app está activa: pie de la barra lateral (10 s) y popover de recursos (2 s).
 - Se cierra solo tras 60 s sin sesiones vivas ni clientes.
 - Socket: `~/Library/Application Support/Terminaly/tly.sock`, permisos 0600, solo acepta peers con el mismo UID.
+
+### Acceso web (`tly web`, `Sources/tly/WebServer.swift`)
+- Proceso aparte del daemon (un fallo o un navegador lento no puede parar la cola de las sesiones). Sirve `Resources/web` (copiado al `.app` por `bundle.sh`; en desarrollo lo busca subiendo desde el ejecutable) y un WebSocket en `/ws`, en `0.0.0.0:<puerto>` (7878 por defecto). Solo red local/VPN: HTTP sin TLS.
+- Config en `web.json` del `stateDir` (0600: `enabled`, `port`, `token`), pid en `web.pid`, lock en `web.lock`, log en `tly-web.log`. La app (`Model/WebAccess.swift`, Ajustes → Web) edita el archivo y relanza el proceso con `DaemonLauncher.spawnDetached`; al arrancar la app lo reinicia si está activado para que sirva los archivos nuevos. Sigue vivo al cerrar la app.
+- Cada pestaña del navegador abre su propia conexión al daemon, solo tras autenticarse (primer mensaje de texto `{"type":"auth","token":…}`; fallo = cierre 4001). Después, cada mensaje binario es exactamente un frame del protocolo del daemon en ambos sentidos. Se filtran las peticiones (`WebServer.allowedRequests`): nada de `create/kill/remove/shutdown` desde la web.
+- Se comprueba `Origin` contra `Host` (otra web abierta en el mismo navegador no puede conectarse). Los nombres de sesión salen de `state.json` (el daemon no los conoce).
+- Tamaño: el navegador redimensiona el PTY al conectarse; al volver a la app (`applicationDidBecomeActive`) los terminales visibles reclaman su tamaño (`reassertSizes`).
+- Cliente: `Resources/web/app.js` (sin build, JS plano) + xterm.js 5.5.0 y addon-fit 0.10.0 copiados de npm (licencia MIT en `LICENSE-xterm`). Textos en/es en el propio `app.js`.
+- Probar: `TERMINALY_STATE_DIR` temporal con un `web.json` (`enabled: true`, puerto libre, token de prueba), `tly new`, `tly web`, y abrir `http://127.0.0.1:<puerto>/#token=<token>`.
 
 ### Protocolo (`TerminalyKit/Protocol.swift`)
 Frames `[UInt32 BE longitud][UInt8 tipo][payload]`. Tipos: `json` (un `Message` plano con `type`), `output`/`input` (16 bytes de UUID + bytes crudos). Peticiones con `reqID`, eventos sin él (`sessions`, `status`, `removed`). Si cambias el protocolo, sube `protocolVersion`: tras una actualización puede quedar corriendo un daemon antiguo.
