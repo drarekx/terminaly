@@ -20,6 +20,8 @@ final class HostedSession {
     private var detailBeforePause: String?
     private var master: Int32 = -1
     private var readSource: DispatchSourceRead?
+    private var writeSource: DispatchSourceWrite?
+    private var pendingInput: [UInt8] = []
     private var exitSource: DispatchSourceProcess?
     private var ring = RingBuffer(capacity: 2 * 1024 * 1024)
     private var hookDriven = false
@@ -98,7 +100,11 @@ final class HostedSession {
                 continue
             } else {
                 // EAGAIN: drained. 0/EIO: slave closed (child gone); exit source handles cleanup.
-                if n == 0 || (n < 0 && errno != EAGAIN) { readSource?.cancel(); readSource = nil }
+                if n == 0 || (n < 0 && errno != EAGAIN) {
+                    // The read source owns the fd: stop writing before it closes it.
+                    writeSource?.cancel(); writeSource = nil; pendingInput.removeAll()
+                    readSource?.cancel(); readSource = nil
+                }
                 return
             }
         }
@@ -115,6 +121,9 @@ final class HostedSession {
         readSource = nil
         exitSource?.cancel()
         exitSource = nil
+        writeSource?.cancel()
+        writeSource = nil
+        pendingInput.removeAll()
         running = false
         paused = false
         quietTimer?.cancel()
@@ -122,16 +131,42 @@ final class HostedSession {
         onExit?(self)
     }
 
+    /// Never blocks: the daemon queue serves every session, and a child that stops reading
+    /// (paused, hung) would otherwise freeze the daemon and deadlock with its own output.
     func write(_ bytes: some Collection<UInt8>) {
-        guard running else { return }
-        let arr = Array(bytes)
-        var off = 0
-        while off < arr.count {
-            let n = arr.withUnsafeBytes { Darwin.write(master, $0.baseAddress! + off, arr.count - off) }
-            if n > 0 { off += n }
-            else if n < 0 && (errno == EINTR || errno == EAGAIN) { usleep(1000) }
-            else { return }
+        // Keys sent to a stopped tree would pile up and flood it on resume.
+        guard running, !paused else { return }
+        pendingInput.append(contentsOf: bytes)
+        if pendingInput.count > Self.maxPendingInput {
+            pendingInput.removeFirst(pendingInput.count - Self.maxPendingInput)
         }
+        flushInput()
+    }
+
+    private static let maxPendingInput = 1 << 20
+
+    private func flushInput() {
+        while !pendingInput.isEmpty {
+            let n = pendingInput.withUnsafeBytes { Darwin.write(master, $0.baseAddress!, $0.count) }
+            if n > 0 {
+                pendingInput.removeFirst(n)
+            } else if n < 0 && errno == EINTR {
+                continue
+            } else if n < 0 && errno == EAGAIN {
+                if writeSource == nil {
+                    let ws = DispatchSource.makeWriteSource(fileDescriptor: master, queue: queue)
+                    ws.setEventHandler { [weak self] in self?.flushInput() }
+                    writeSource = ws
+                    ws.resume()
+                }
+                return
+            } else {
+                pendingInput.removeAll()
+                break
+            }
+        }
+        writeSource?.cancel()
+        writeSource = nil
     }
 
     func resize(cols: Int, rows: Int) {
