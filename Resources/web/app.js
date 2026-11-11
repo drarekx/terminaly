@@ -1,6 +1,7 @@
 // Terminaly web client. Speaks the daemon's own frame protocol over a WebSocket:
 // one binary message = one frame [UInt32 BE length][UInt8 kind][payload]. `tly web` authenticates
-// the socket and filters requests; everything else is the same as the Mac app.
+// the socket and filters requests. Starting sessions is a text command to the bridge ("start",
+// "new"): the page names a saved session or a preset, and the bridge takes the command from the Mac.
 (() => {
   "use strict";
 
@@ -15,22 +16,26 @@
     en: {
       loginHelp: "Paste the access token from Terminaly → Settings → Web on your Mac.",
       tokenPlaceholder: "Access token", connect: "Connect", logout: "Sign out", sessions: "Sessions",
-      empty: "Pick a session.", noSessions: "No sessions running on the Mac.",
+      empty: "Pick a session.", noSessions: "No projects yet. Add one in Terminaly on the Mac.",
       permission: "Needs your permission", allow: "Allow", deny: "Deny", pause: "Pause", resume: "Resume",
-      badToken: "That token is not valid.", unreachable: "Can't reach the session host on the Mac.",
-      reconnecting: "Reconnecting…",
+      badToken: "That token is not valid.", reconnecting: "Reconnecting…",
       starting: "Starting", working: "Working", idle: "Ready", needsInput: "Needs input", paused: "Paused", exited: "Exited",
-      shell: "Shell",
+      stopped: "Stopped", shell: "Shell", workspace: "Workspace", allWorkspaces: "All workspaces",
+      stoppedBar: "This session is stopped", startFresh: "Start Fresh", resumeConversation: "Resume Conversation",
+      start: "Start", newSession: "New session", newIn: "New session in", startFailed: "Could not start the session",
+      stoppedEmpty: "Start it again to keep working.",
     },
     es: {
       loginHelp: "Pega el token de acceso de Terminaly → Ajustes → Web de tu Mac.",
       tokenPlaceholder: "Token de acceso", connect: "Conectar", logout: "Cerrar sesión", sessions: "Sesiones",
-      empty: "Elige una sesión.", noSessions: "No hay sesiones abiertas en el Mac.",
+      empty: "Elige una sesión.", noSessions: "Aún no hay proyectos. Añade uno en Terminaly en el Mac.",
       permission: "Necesita tu permiso", allow: "Permitir", deny: "Denegar", pause: "Pausar", resume: "Reanudar",
-      badToken: "El token no es válido.", unreachable: "No se puede contactar con el host de sesiones del Mac.",
-      reconnecting: "Reconectando…",
+      badToken: "El token no es válido.", reconnecting: "Reconectando…",
       starting: "Arrancando", working: "Trabajando", idle: "Listo", needsInput: "Pide respuesta", paused: "En pausa", exited: "Terminado",
-      shell: "Shell",
+      stopped: "Detenida", shell: "Shell", workspace: "Espacio de trabajo", allWorkspaces: "Todos los espacios",
+      stoppedBar: "Esta sesión está detenida", startFresh: "Empezar de cero", resumeConversation: "Reanudar conversación",
+      start: "Iniciar", newSession: "Nueva sesión", newIn: "Nueva sesión en", startFailed: "No se ha podido iniciar la sesión",
+      stoppedEmpty: "Iníciala de nuevo para seguir trabajando.",
     },
   };
   const lang = (navigator.languages || [navigator.language]).some((l) => /^(es|ca|gl|eu)\b/i.test(l)) ? "es" : "en";
@@ -76,9 +81,10 @@
 
   // MARK: State
 
-  const sessions = new Map(); // id → SessionInfo from the daemon
-  let titles = {};            // id → {title, project} from the app's state file
+  const live = new Map();     // id → SessionInfo from the daemon (running, or exited but not removed)
+  let catalog = { workspaces: [], projects: [], presets: [], sessions: [] }; // from the app's state file
   let current = store.get("session");
+  let workspace = store.get("workspace") || "";
   let attached = null;
   let ws = null;
   let token = null;
@@ -86,6 +92,7 @@
   const pending = new Map();
   let retryDelay = 1000;
   let retryTimer = null;
+  let catalogTimer = null;
 
   // Tokens can arrive in the link (#token=…) so the Mac can show one URL to open; never keep it in the address bar.
   const hashToken = new URLSearchParams(location.hash.slice(1)).get("token");
@@ -102,7 +109,6 @@
     fontSize: matchMedia("(max-width: 720px)").matches ? 12 : 13,
     cursorBlink: true,
     scrollback: 10000,
-    allowProposedApi: false,
     theme: {
       background: "#0F1013", foreground: "#D4D4DC", cursor: "#ECECF1", cursorAccent: "#0F1013",
       selectionBackground: "rgba(76, 141, 255, 0.35)",
@@ -129,17 +135,30 @@
   }
   new ResizeObserver(refit).observe($("terminal-card"));
 
+  // Size for a session that starts before the terminal is on screen.
+  function gridSize() {
+    if (termOpened) return { cols: term.cols, rows: term.rows };
+    const dims = fit.proposeDimensions();
+    return dims && dims.cols ? dims : { cols: 120, rows: 32 };
+  }
+
   // MARK: Connection
 
+  const isOpen = () => ws && ws.readyState === WebSocket.OPEN;
+
   function send(msg, reply) {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!isOpen()) return;
     const m = { ...msg, reqID: nextReq++ };
     if (reply) pending.set(m.reqID, reply);
     ws.send(jsonFrame(m));
   }
 
+  function command(msg) {
+    if (isOpen()) ws.send(JSON.stringify(msg));
+  }
+
   function sendInput(bytes) {
-    if (attached && ws && ws.readyState === WebSocket.OPEN) ws.send(inputFrame(attached, bytes));
+    if (attached && isOpen() && live.get(attached)?.running) ws.send(inputFrame(attached, bytes));
   }
 
   function connect() {
@@ -165,22 +184,39 @@
     };
   }
 
+  // The app writes new names and sessions to its state file a moment after they change.
+  function refreshCatalogSoon() {
+    clearTimeout(catalogTimer);
+    catalogTimer = setTimeout(() => command({ type: "catalog" }), 800);
+  }
+
   function onText(msg) {
-    if (msg.type === "ready") {
-      retryDelay = 1000;
-      titles = msg.titles || {};
-      showApp();
-      setConn("open");
-      send({ type: "list" }, (r) => {
-        sessions.clear();
-        for (const s of r.sessions || []) sessions.set(s.id, s);
-        if (current && !sessions.has(current)) current = null;
+    switch (msg.type) {
+      case "ready":
+        retryDelay = 1000;
+        catalog = msg.catalog || catalog;
+        showApp();
+        setConn("open");
+        send({ type: "list" }, (r) => {
+          live.clear();
+          for (const s of r.sessions || []) live.set(s.id, s);
+          if (current && !known(current)) current = null;
+          render();
+          if (current) open(current);
+        });
+        break;
+      case "catalog":
+        catalog = msg.catalog || catalog;
         render();
-        if (current) attach(current);
-      });
-    } else if (msg.type === "titles") {
-      titles = msg.titles || {};
-      render();
+        break;
+      case "started":
+        if (msg.error || !msg.id) {
+          showError(`${t("startFailed")}: ${msg.error || "?"}`);
+          break;
+        }
+        refreshCatalogSoon();
+        select(msg.id, true);
+        break;
     }
   }
 
@@ -201,40 +237,79 @@
     }
     switch (msg.type) {
       case "sessions":
-        for (const s of msg.sessions || []) sessions.set(s.id, s);
-        // A new session's name is written by the app a moment later.
-        setTimeout(() => ws && ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: "titles" })), 800);
+        for (const s of msg.sessions || []) live.set(s.id, s);
+        refreshCatalogSoon();
         break;
       case "status": {
-        const s = sessions.get(msg.id);
+        const s = live.get(msg.id);
         if (!s) break;
         s.status = msg.status;
         s.permission = msg.permission || false;
         if (msg.exitCode != null) s.exitCode = msg.exitCode;
-        if (msg.status === "exited") s.running = false;
+        if (msg.status === "exited") { s.running = false; refreshCatalogSoon(); }
         break;
       }
       case "removed":
-        sessions.delete(msg.id);
-        if (current === msg.id) select(null);
+        live.delete(msg.id);
+        refreshCatalogSoon();
+        if (current === msg.id) open(current);
         break;
     }
     render();
   }
 
-  // MARK: Sessions
+  // MARK: Model
 
-  function select(id) {
-    current = id;
-    store.set("session", id);
-    render();
-    if (id) attach(id);
-    else if (attached) { send({ type: "detach", id: attached }); attached = null; }
-    $("app").dataset.view = id ? "terminal" : "list";
+  const saved = (id) => catalog.sessions.find((s) => s.id === id);
+  const known = (id) => live.has(id) || !!saved(id);
+  const isRunning = (id) => !!live.get(id)?.running;
+
+  /// One row: the daemon's live state, the app's name and project.
+  function view(id) {
+    const info = live.get(id);
+    const meta = saved(id);
+    const running = !!info?.running;
+    let title = meta?.title;
+    if (!title) title = info?.command ? info.command.split(/\s+/)[0] : t("shell");
+    return {
+      id, title, running,
+      status: running ? info.status : "stopped",
+      permission: running && !!info.permission,
+      projectID: meta?.projectID || null,
+      cwd: info?.cwd || "",
+      resumable: !!meta?.resumable,
+      createdAt: meta?.createdAt ?? info?.createdAt ?? 0,
+    };
   }
 
-  function attach(id) {
+  function projectName(v) {
+    const p = catalog.projects.find((p) => p.id === v.projectID);
+    if (p) return p.name;
+    return v.cwd.split("/").filter(Boolean).pop() || "/";
+  }
+
+  // MARK: Sessions
+
+  function select(id, fromStart) {
+    current = id;
+    store.set("session", id);
+    closeMenu();
+    $("app").dataset.view = id ? "terminal" : "list";
+    if (id) open(id, fromStart);
+    else if (attached) { send({ type: "detach", id: attached }); attached = null; }
+    render();
+  }
+
+  /// Shows a session: live ones attach; stopped ones show their last output if the Mac still has it.
+  function open(id) {
     if (attached && attached !== id) send({ type: "detach", id: attached });
+    attached = null;
+    if (!live.has(id)) {
+      $("terminal-card").hidden = true;
+      $("empty").hidden = false;
+      render();
+      return;
+    }
     attached = id;
     $("terminal-card").hidden = false;
     $("empty").hidden = true;
@@ -246,6 +321,7 @@
     fit.fit();
     send({ type: "attach", id }, (r) => {
       if (r.error || attached !== id) return;
+      if (!isRunning(id)) return;
       // Same nudge as the app: full-screen programs repaint after the replay.
       send({ type: "resize", id, cols: Math.max(term.cols - 1, 2), rows: term.rows });
       setTimeout(() => attached === id && send({ type: "resize", id, cols: term.cols, rows: term.rows }), 150);
@@ -253,84 +329,160 @@
     });
   }
 
-  function name(s) {
-    const meta = titles[s.id];
-    if (meta && meta.title) return meta.title;
-    return s.command ? s.command.split(/\s+/)[0] : t("shell");
+  function start(id, resume) {
+    command({ type: "start", id, resume, ...gridSize() });
   }
-  function project(s) {
-    const meta = titles[s.id];
-    if (meta && meta.project) return meta.project;
-    return s.cwd.split("/").filter(Boolean).pop() || "/";
+
+  function newSession(projectID, presetID) {
+    closeMenu();
+    command({ type: "new", projectID, presetID, ...gridSize() });
+  }
+
+  // MARK: Rendering
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  const plusIcon = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+
+  function renderWorkspaces() {
+    const sel = $("workspace");
+    const opts = [["", t("allWorkspaces")], ...catalog.workspaces.map((w) => [w.id, w.name])];
+    if (workspace && !catalog.workspaces.some((w) => w.id === workspace)) workspace = "";
+    sel.replaceChildren(...opts.map(([v, label]) => { const o = el("option", null, label); o.value = v; return o; }));
+    sel.value = workspace;
+    sel.parentElement.hidden = catalog.workspaces.length < 2;
   }
 
   function render() {
+    renderWorkspaces();
     const list = $("sessions");
-    const live = [...sessions.values()].filter((s) => s.running || s.id === current);
     list.replaceChildren();
-    if (live.length === 0) {
-      const p = document.createElement("p");
-      p.className = "none";
-      p.textContent = t("noSessions");
-      list.append(p);
+
+    // Every saved session (not archived), plus live ones the app hasn't saved yet.
+    const ids = new Set([...catalog.sessions.map((s) => s.id), ...[...live.values()].filter((s) => s.running).map((s) => s.id)]);
+    const rows = [...ids].map(view);
+    const byProject = new Map();
+    for (const v of rows) {
+      const key = v.projectID || `cwd:${v.cwd}`;
+      if (!byProject.has(key)) byProject.set(key, []);
+      byProject.get(key).push(v);
     }
-    const groups = new Map();
-    for (const s of live.sort((a, b) => a.createdAt - b.createdAt)) {
-      const key = project(s);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(s);
-    }
-    for (const [group, items] of groups) {
-      const h = document.createElement("div");
-      h.className = "group";
-      h.textContent = group;
-      list.append(h);
-      for (const s of items) {
-        const row = document.createElement("button");
-        row.className = "row";
-        row.setAttribute("aria-current", s.id === current ? "true" : "false");
-        row.onclick = () => select(s.id);
-        const dot = document.createElement("span");
-        dot.className = "dot";
-        dot.dataset.status = s.status;
-        const text = document.createElement("span");
-        text.className = "row-text";
-        const title = document.createElement("span");
-        title.className = "row-title";
-        title.textContent = name(s);
-        const sub = document.createElement("span");
-        sub.className = "row-sub";
-        sub.dataset.status = s.status;
-        sub.textContent = t(s.status);
-        text.append(title, sub);
-        row.append(dot, text);
-        list.append(row);
+
+    const groups = catalog.projects
+      .filter((p) => !workspace || p.workspaceID === workspace)
+      .map((p) => ({ id: p.id, name: p.name, items: byProject.get(p.id) || [] }));
+    // Sessions started elsewhere whose folder is not a project yet.
+    if (!workspace) {
+      for (const [key, items] of byProject) {
+        if (key.startsWith("cwd:")) groups.push({ id: null, name: projectName(items[0]), items });
       }
     }
 
-    const s = current && sessions.get(current);
-    $("pane-name").textContent = s ? name(s) : "";
-    $("pane-status").textContent = s ? `${t(s.status)} · ${project(s)}` : "";
-    $("pane-dot").dataset.status = s ? s.status : "";
-    $("pane-dot").hidden = !s;
-    $("permission").hidden = !(s && s.permission);
-    $("keys").hidden = !(s && matchMedia("(pointer: coarse)").matches);
+    if (groups.length === 0) list.append(el("p", "none", t("noSessions")));
+    for (const g of groups) {
+      const head = el("div", "group");
+      head.append(el("span", "group-name", g.name));
+      if (g.id && catalog.presets.length) {
+        const add = el("button", "icon-btn");
+        add.innerHTML = plusIcon;
+        add.setAttribute("aria-label", `${t("newIn")} ${g.name}`);
+        add.title = t("newSession");
+        add.setAttribute("aria-haspopup", "menu");
+        add.onclick = (ev) => { ev.stopPropagation(); openMenu(add, g); };
+        head.append(add);
+      }
+      list.append(head);
+      // Running first, then stopped; each by creation.
+      g.items.sort((a, b) => (b.running - a.running) || (a.createdAt - b.createdAt));
+      for (const v of g.items) list.append(row(v));
+    }
+
+    const v = current && known(current) ? view(current) : null;
+    $("pane-name").textContent = v ? v.title : "";
+    $("pane-status").textContent = v ? `${t(v.status)} · ${projectName(v)}` : "";
+    $("pane-dot").dataset.status = v ? (v.running ? v.status : "exited") : "";
+    $("pane-dot").hidden = !v;
+    $("permission").hidden = !(v && v.permission);
+    $("keys").hidden = !(v && v.running && matchMedia("(pointer: coarse)").matches);
+    $("stopped").hidden = !(v && !v.running && v.projectID);
+    $("resume").hidden = !(v && v.resumable);
+    $("restart").textContent = v && v.resumable ? t("startFresh") : t("start");
+    $("restart").className = v && v.resumable ? "secondary" : "primary";
+    $("empty-text").textContent = v && !v.running ? t("stoppedEmpty") : t("empty");
     const pause = $("pause");
-    pause.hidden = !(s && s.running);
-    pause.textContent = s && s.status === "paused" ? t("resume") : t("pause");
-    if (!s) {
+    pause.hidden = !(v && v.running);
+    pause.textContent = v && v.status === "paused" ? t("resume") : t("pause");
+    if (!v) {
       $("terminal-card").hidden = true;
       $("empty").hidden = false;
     }
-    document.title = s ? `${name(s)} — Terminaly` : "Terminaly";
+    document.title = v ? `${v.title} — Terminaly` : "Terminaly";
   }
+
+  function row(v) {
+    const r = el("button", "row");
+    r.setAttribute("aria-current", v.id === current ? "true" : "false");
+    r.dataset.stopped = String(!v.running);
+    r.onclick = () => select(v.id);
+    const dot = el("span", "dot");
+    dot.dataset.status = v.running ? v.status : "exited";
+    const text = el("span", "row-text");
+    text.append(el("span", "row-title", v.title));
+    const sub = el("span", "row-sub", t(v.status));
+    sub.dataset.status = v.status;
+    text.append(sub);
+    r.append(dot, text);
+    return r;
+  }
+
+  // MARK: New-session menu
+
+  function openMenu(anchor, group) {
+    const menu = $("menu");
+    if (!menu.hidden && menu.dataset.project === group.id) return closeMenu();
+    menu.dataset.project = group.id;
+    menu.replaceChildren(el("div", "menu-label", `${t("newIn")} ${group.name}`));
+    for (const p of catalog.presets) {
+      const b = el("button", null, p.label || t("shell"));
+      b.setAttribute("role", "menuitem");
+      if (p.command) b.append(el("span", "cmd", p.command));
+      b.onclick = () => newSession(group.id, p.id);
+      menu.append(b);
+    }
+    menu.hidden = false;
+    const r = anchor.getBoundingClientRect();
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    menu.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
+    menu.style.top = `${r.bottom + h + 8 > innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4}px`;
+    menu.querySelector("button")?.focus();
+  }
+
+  function closeMenu() {
+    $("menu").hidden = true;
+    delete $("menu").dataset.project;
+  }
+
+  document.addEventListener("click", (ev) => { if (!$("menu").contains(ev.target)) closeMenu(); });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !$("menu").hidden) { closeMenu(); ev.preventDefault(); } });
 
   // MARK: UI
 
   function setConn(state) {
-    const el = $("conn");
-    el.dataset.state = state;
-    el.title = state === "open" ? "" : t("reconnecting");
+    const c = $("conn");
+    c.dataset.state = state;
+    c.title = state === "open" ? "" : t("reconnecting");
+  }
+
+  let errorTimer = null;
+  function showError(text) {
+    $("empty-text").textContent = text;
+    clearTimeout(errorTimer);
+    errorTimer = setTimeout(render, 4000);
   }
 
   function showLogin(error) {
@@ -363,11 +515,18 @@
     attached = null;
     showLogin();
   };
+  $("workspace").onchange = (ev) => {
+    workspace = ev.target.value;
+    store.set("workspace", workspace || null);
+    render();
+  };
   $("back").onclick = () => select(null);
   $("allow").onclick = () => { sendInput(encoder.encode("\r")); term.focus(); };
   $("deny").onclick = () => { sendInput(encoder.encode("\x1b")); term.focus(); };
+  $("resume").onclick = () => current && start(current, true);
+  $("restart").onclick = () => current && start(current, false);
   $("pause").onclick = () => {
-    const s = current && sessions.get(current);
+    const s = current && live.get(current);
     if (s) send({ type: s.status === "paused" ? "continue" : "pause", id: s.id });
   };
   const keys = { esc: "\x1b", tab: "\t", up: "\x1b[A", down: "\x1b[B", ctrlc: "\x03", enter: "\r" };

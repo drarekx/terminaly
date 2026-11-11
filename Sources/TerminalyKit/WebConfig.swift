@@ -47,3 +47,14 @@ public struct WebConfig: Codable, Equatable, Sendable {
         return pid
     }
 }
+
+/// Shared by the app and `tly web` so both resume an agent conversation the same way.
+public enum AgentResume {
+    /// `claude --resume <id>` for Claude sessions that reported their conversation id; nil otherwise.
+    public static func command(for command: String, agentSessionID: String?) -> String? {
+        guard let sid = agentSessionID, !sid.isEmpty,
+              command.split(separator: " ").first == "claude" else { return nil }
+        let safe = sid.filter { $0.isLetter || $0.isNumber || $0 == "-" }
+        return safe.isEmpty ? nil : "claude --resume \(safe)"
+    }
+}

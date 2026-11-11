@@ -189,22 +189,27 @@ final class WebServer {
         return false
     }
 
-    /// Session names come from the app's state file: the daemon only knows commands and folders.
-    func sessionTitles() -> [String: [String: String]] {
-        let url = TerminalyPaths.stateDir.appendingPathComponent("state.json")
-        guard let data = try? Data(contentsOf: url),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
-        var projects: [String: String] = [:]
-        for p in root["projects"] as? [[String: Any]] ?? [] {
-            if let id = p["id"] as? String, let name = p["name"] as? String { projects[id.uppercased()] = name }
-        }
-        var titles: [String: [String: String]] = [:]
-        for s in root["sessions"] as? [[String: Any]] ?? [] {
-            guard let id = s["id"] as? String, let title = s["title"] as? String else { continue }
-            let project = (s["projectID"] as? String).flatMap { projects[$0.uppercased()] } ?? ""
-            titles[id.uppercased()] = ["title": title, "project": project]
-        }
-        return titles
+    /// What the page needs from the app's state file: names, projects, presets and stopped sessions.
+    /// The daemon only knows the sessions that are running.
+    func catalog() -> [String: Any] {
+        let state = AppStateFile.load()
+        return [
+            "workspaces": (state.workspaces ?? []).map { ["id": $0.id.uuidString, "name": $0.name ?? "", "color": $0.color ?? "blue"] },
+            "projects": (state.projects ?? []).map {
+                ["id": $0.id.uuidString, "name": $0.name ?? "", "workspaceID": $0.workspaceID?.uuidString ?? ""]
+            },
+            "presets": state.presetList.map { ["id": $0.id, "label": $0.label, "command": $0.command] },
+            "sessions": (state.sessions ?? []).filter { $0.archived != true }.map { s -> [String: Any] in
+                [
+                    "id": s.id.uuidString,
+                    "projectID": s.projectID?.uuidString ?? "",
+                    "title": s.title ?? "",
+                    "command": s.command ?? "",
+                    "createdAt": s.createdAt?.timeIntervalSinceReferenceDate ?? 0,
+                    "resumable": AgentResume.command(for: s.command ?? "", agentSessionID: s.agentSessionID) != nil,
+                ]
+            },
+        ]
     }
 
     func log(_ s: String) {
@@ -284,14 +289,62 @@ final class WebBridge {
                 }
                 authenticated = true
                 guard connectDaemon() else { return close(code: 1011, reason: "session host unavailable") }
-                sendJSON(["type": "ready", "titles": server.sessionTitles()])
-            } else if type == "titles", let server {
-                sendJSON(["type": "titles", "titles": server.sessionTitles()])
+                sendJSON(["type": "ready", "catalog": server.catalog()])
+            } else if let server {
+                handleCommand(type, obj, server: server)
             }
         case .binary:
             guard authenticated else { return close(code: 4001, reason: "unauthorized") }
             forwardToDaemon(m.payload)
         }
+    }
+
+    /// Starting sessions goes through here instead of the daemon's `create`: the browser names a saved
+    /// session or a preset, and the command and folder come from the app's state, never from the page.
+    private func handleCommand(_ type: String, _ obj: [String: Any], server: WebServer) {
+        let cols = obj["cols"] as? Int ?? 120
+        let rows = obj["rows"] as? Int ?? 32
+        switch type {
+        case "catalog":
+            sendJSON(["type": "catalog", "catalog": server.catalog()])
+        case "start":
+            let state = AppStateFile.load()
+            guard let id = (obj["id"] as? String).flatMap(UUID.init(uuidString:)),
+                  let s = state.sessions?.first(where: { $0.id == id }) else {
+                return sendJSON(["type": "started", "error": "unknown session"])
+            }
+            let command = obj["resume"] as? Bool == true
+                ? AgentResume.command(for: s.command ?? "", agentSessionID: s.agentSessionID)
+                : s.command ?? ""
+            guard let command else { return sendJSON(["type": "started", "id": id.uuidString, "error": "nothing to resume"]) }
+            let cwd = s.worktreePath ?? state.project(s.projectID)?.path ?? NSHomeDirectory()
+            create(id: id, command: command, cwd: cwd, cols: cols, rows: rows)
+        case "new":
+            let state = AppStateFile.load()
+            guard let project = state.project((obj["projectID"] as? String).flatMap(UUID.init(uuidString:))),
+                  let preset = state.presetList.first(where: { $0.id == obj["presetID"] as? String }) else {
+                return sendJSON(["type": "started", "error": "unknown project or preset"])
+            }
+            create(id: UUID(), command: preset.command, cwd: project.path ?? NSHomeDirectory(), cols: cols, rows: rows)
+        default:
+            break
+        }
+    }
+
+    /// Bridge-made requests use negative ids so their replies are not forwarded to the page.
+    private var nextInternalID = -1
+    private var pendingCreates: [Int: UUID] = [:]
+
+    private func create(id: UUID, command: String, cwd: String, cols: Int, rows: Int) {
+        var m = Message(type: "create", reqID: nextInternalID, id: id)
+        m.command = command
+        m.cwd = cwd
+        m.cols = max(2, min(cols, 1000))
+        m.rows = max(1, min(rows, 1000))
+        pendingCreates[nextInternalID] = id
+        nextInternalID -= 1
+        server?.log("start \(command.isEmpty ? "shell" : command) in \(cwd)")
+        daemonWriter?.send(Frame.json(m))
     }
 
     private func forwardToDaemon(_ bytes: [UInt8]) {
@@ -336,7 +389,13 @@ final class WebBridge {
             guard let frames = try? buf.withUnsafeBytes({ try daemonDecoder.append(UnsafeRawBufferPointer(rebasing: $0[0..<n])) }) else {
                 return close(code: 1011, reason: "bad data from session host")
             }
-            for f in frames { send(.binary, f.bytes) }
+            for f in frames {
+                if f.kind == .json, let msg = f.message, let r = msg.reqID, r < 0, let id = pendingCreates.removeValue(forKey: r) {
+                    sendJSON(["type": "started", "id": id.uuidString, "error": msg.error ?? NSNull()])
+                    continue
+                }
+                send(.binary, f.bytes)
+            }
         } else if n == 0 || (errno != EAGAIN && errno != EINTR) {
             close(code: 1011, reason: "session host closed")
         }
@@ -470,5 +529,50 @@ private extension URL {
     var hostPort: String? {
         guard let host else { return nil }
         return port.map { "\(host):\($0)" } ?? host
+    }
+}
+
+/// The parts of the app's `state.json` the web needs. Read fresh on every request: the app owns
+/// the file and rewrites it whenever something changes.
+struct AppStateFile: Decodable {
+    struct Workspace: Decodable { var id: UUID; var name: String?; var color: String? }
+    struct Project: Decodable { var id: UUID; var name: String?; var path: String?; var workspaceID: UUID? }
+    struct Preset: Decodable { var id: UUID; var label: String?; var command: String? }
+    struct Session: Decodable {
+        var id: UUID
+        var projectID: UUID?
+        var title: String?
+        var command: String?
+        var archived: Bool?
+        var agentSessionID: String?
+        var worktreePath: String?
+        var createdAt: Date?
+    }
+
+    var workspaces: [Workspace]?
+    var projects: [Project]?
+    var presets: [Preset]?
+    var sessions: [Session]?
+
+    static func load() -> AppStateFile {
+        let url = TerminalyPaths.stateDir.appendingPathComponent("state.json")
+        guard let data = try? Data(contentsOf: url),
+              let state = try? JSONDecoder().decode(AppStateFile.self, from: data) else {
+            return AppStateFile()
+        }
+        return state
+    }
+
+    func project(_ id: UUID?) -> Project? {
+        guard let id else { return nil }
+        return projects?.first { $0.id == id }
+    }
+
+    /// The app's presets; a state file without them gets the app's defaults.
+    var presetList: [(id: String, label: String, command: String)] {
+        if let presets, !presets.isEmpty {
+            return presets.map { ($0.id.uuidString, $0.label ?? "", $0.command ?? "") }
+        }
+        return [("default-shell", "Shell", ""), ("default-claude", "Claude", "claude"), ("default-codex", "Codex", "codex")]
     }
 }

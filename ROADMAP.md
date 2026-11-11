@@ -29,7 +29,7 @@ Hecho: menús en popover, botones legibles, escala tipográfica, interfaz en esp
 
 ## v0.5 — Sesiones en la red local ★
 
-✅ ★ **Acceso desde el navegador** (`tly web`): Ajustes → Web abre las sesiones de este Mac a cualquier navegador de la red local o de la VPN, con token. Lista de sesiones con estado, terminal en directo (xterm.js), Permitir/Denegar, pausa y teclas rápidas en el móvil. Sin crear ni cerrar sesiones desde la web.
+✅ ★ **Acceso desde el navegador** (`tly web`): Ajustes → Web abre las sesiones de este Mac a cualquier navegador de la red local o de la VPN, con token. Lista de sesiones con estado, terminal en directo (xterm.js), Permitir/Denegar, pausa y teclas rápidas en el móvil. Sesiones paradas con «Reanudar conversación» / «Empezar de cero», sesión nueva con un preset desde el «+» de cada proyecto y filtro por espacio de trabajo. Cerrar o borrar sesiones sigue solo en la app.
 
 Pendiente: ver y controlar las sesiones de otro Mac de la misma red como si fueran locales, dentro de la app.
 

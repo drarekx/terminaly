@@ -62,19 +62,26 @@ final class AppStore {
     func connectToHost(completion: (() -> Void)? = nil) {
         terminals.connect { [weak self] infos in
             guard let self else { return }
-            for info in infos where info.running && self.session(info.id) == nil {
-                let project = self.projects.first { $0.path == info.cwd }
-                    ?? self.addProject(at: URL(fileURLWithPath: info.cwd))
-                let preset = self.presets.first { $0.command == info.command }
-                self.sessions.append(Session(id: info.id, projectID: project.id,
-                                             title: preset?.label ?? (info.command.isEmpty ? "Shell" : info.command),
-                                             command: info.command,
-                                             symbol: preset?.symbol ?? "terminal",
-                                             createdAt: info.createdAt))
-            }
+            for info in infos where info.running { self.adopt(info) }
             self.scheduleSave()
             completion?()
         }
+    }
+
+    /// A running host session this store doesn't know (started with `tly new` or from the web) becomes
+    /// a session of the project with that folder, named after the matching preset.
+    func adopt(_ info: SessionInfo) {
+        guard session(info.id) == nil else { return }
+        let project = projects.first { $0.path == info.cwd } ?? addProject(at: URL(fileURLWithPath: info.cwd))
+        let preset = presets.first { $0.command == info.command }
+        let n = sessions.filter { $0.projectID == project.id && $0.command == info.command }.count + 1
+        let label = preset?.label ?? (info.command.isEmpty ? "Shell" : info.command)
+        sessions.append(Session(id: info.id, projectID: project.id,
+                                title: n > 1 ? "\(label) \(n)" : label,
+                                command: info.command,
+                                symbol: preset?.symbol ?? "terminal",
+                                createdAt: info.createdAt))
+        scheduleSave()
     }
 
     // MARK: Lookup

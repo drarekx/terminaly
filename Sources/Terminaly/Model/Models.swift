@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import TerminalyKit
 
 /// Named group of projects with its own pane layout.
 struct Workspace: Identifiable, Codable, Hashable {
@@ -104,12 +105,7 @@ struct Session: Identifiable, Codable, Hashable {
     }
 
     /// Command that continues the agent's last conversation, when the agent supports it.
-    var resumeCommand: String? {
-        guard let sid = agentSessionID, !sid.isEmpty,
-              command.split(separator: " ").first == "claude" else { return nil }
-        let safe = sid.filter { $0.isLetter || $0.isNumber || $0 == "-" }
-        return safe.isEmpty ? nil : "claude --resume \(safe)"
-    }
+    var resumeCommand: String? { AgentResume.command(for: command, agentSessionID: agentSessionID) }
 }
 
 /// Recursive split layout. A leaf shows one session (or nothing).

@@ -109,6 +109,8 @@ final class TerminalRegistry {
     let client = DaemonClient()
     fileprivate var views: [UUID: AgentTerminalView] = [:]
     fileprivate var running: Set<UUID> = []
+    /// Sessions this app asked the host to create; their `sessions` event arrives before the reply.
+    private var starting: Set<UUID> = []
 
     init() {
         client.onOutput = { [weak self] id, bytes in
@@ -162,8 +164,10 @@ final class TerminalRegistry {
         m.command = command ?? session.command
         m.cwd = cwd
         (m.cols, m.rows) = view.gridSize
+        starting.insert(session.id)
         client.request(m) { [weak self] reply in
             guard let self else { return }
+            self.starting.remove(session.id)
             if let error = reply.error {
                 view.feed(text: "\r\n[Terminaly] could not start session: \(error)\r\n")
                 self.store?.applyStatus(session.id, status: "exited", detail: nil, notify: false, exitCode: nil)
@@ -218,6 +222,16 @@ final class TerminalRegistry {
     }
 
     private func handle(_ msg: Message) {
+        if msg.type == "sessions" {
+            // Started by someone else (the web, `tly new`, a resume from the browser): show it here too.
+            for info in msg.sessions ?? [] where info.running && !running.contains(info.id) && !starting.contains(info.id) {
+                store?.adopt(info)
+                views.removeValue(forKey: info.id)?.removeFromSuperview()  // old output of a restarted session
+                running.insert(info.id)
+                attach(info.id)
+            }
+            return
+        }
         guard let id = msg.id else { return }
         switch msg.type {
         case "status":

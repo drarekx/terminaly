@@ -29,6 +29,9 @@
       <span class="brand">Terminaly</span>
       <span id="conn" class="conn" data-state="connecting"></span>
     </header>
+    <div class="workspace-pick">
+      <select id="workspace" aria-label="Workspace" data-i18n-label="workspace"></select>
+    </div>
     <nav id="sessions" class="sessions" aria-label="Sessions"></nav>
     <footer class="sidebar-foot">
       <button id="logout" class="link" data-i18n="logout">Sign out</button>
@@ -47,7 +50,7 @@
       </div>
       <button id="pause" class="secondary" hidden></button>
     </header>
-    <div id="empty" class="empty" data-i18n="empty">Pick a session.</div>
+    <div id="empty" class="empty"><span id="empty-text" data-i18n="empty">Pick a session.</span></div>
     <div id="terminal-card" class="terminal-card" hidden>
       <div id="terminal" class="terminal"></div>
     </div>
@@ -56,6 +59,12 @@
       <span class="spacer"></span>
       <button id="deny" class="secondary" data-i18n="deny">Deny</button>
       <button id="allow" class="primary" data-i18n="allow">Allow</button>
+    </div>
+    <div id="stopped" class="stopped" hidden>
+      <span data-i18n="stoppedBar">This session is stopped</span>
+      <span class="spacer"></span>
+      <button id="restart" class="secondary" data-i18n="startFresh">Start Fresh</button>
+      <button id="resume" class="primary" data-i18n="resumeConversation">Resume Conversation</button>
     </div>
     <div id="keys" class="keys" hidden>
       <button data-key="esc">Esc</button>
@@ -67,6 +76,8 @@
     </div>
   </main>
 </div>
+
+<div id="menu" class="menu" role="menu" hidden></div>
 
 <script src="xterm.js"></script>
 <script src="addon-fit.js"></script>
