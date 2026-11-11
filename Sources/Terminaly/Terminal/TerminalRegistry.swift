@@ -19,6 +19,25 @@ final class AgentTerminalView: TerminalView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        applyRenderer()
+    }
+
+    /// SwiftTerm's Metal renderer draws on its own thread from a glyph atlas; the default CoreGraphics
+    /// one rebuilds attributed strings on the main thread for every repaint (most of the app's CPU
+    /// while an agent animates its status line). Metal needs a window, and stops its loop without one.
+    func applyRenderer() {
+        guard window != nil else { return }
+        let wanted = TerminalPrefs.gpuRendering
+        guard wanted != isUsingMetalRenderer else { return }
+        do {
+            try setUseMetal(wanted)
+        } catch {
+            NSLog("Terminaly: GPU rendering unavailable: \(error)")
+        }
+    }
+
     /// Last grid size reported by SwiftTerm through `sizeChanged`.
     var gridSize: (cols: Int, rows: Int) = (80, 24)
 
@@ -96,6 +115,12 @@ enum TerminalPrefs {
     }
     static var optionAsMeta: Bool {
         UserDefaults.standard.object(forKey: "optionAsMeta") as? Bool ?? true
+    }
+    /// Off in snapshot mode: `cacheDisplay` cannot capture a Metal layer.
+    static var gpuRendering: Bool {
+        if let forced = ProcessInfo.processInfo.environment["TERMINALY_GPU"] { return forced == "1" }
+        if ProcessInfo.processInfo.environment["TERMINALY_SNAPSHOT_DIR"] != nil { return false }
+        return UserDefaults.standard.bool(forKey: "terminalGPU")
     }
     static var fontFamily: String {
         UserDefaults.standard.string(forKey: "terminalFontFamily") ?? ""
@@ -268,6 +293,7 @@ final class TerminalRegistry {
             v.font = font
             theme.apply(to: v)
             v.optionAsMetaKey = TerminalPrefs.optionAsMeta
+            v.applyRenderer()
         }
     }
 }

@@ -213,3 +213,6 @@
 "New Token" = "Nuevo token";
 "The link signs the browser in without typing the token. A new token signs out every browser." = "El enlace inicia sesión en el navegador sin escribir el token. Un token nuevo cierra la sesión de todos los navegadores.";
 "The web server did not start. Is port %@ in use?" = "El servidor web no ha arrancado. ¿Está ocupado el puerto %@?";
+"Performance" = "Rendimiento";
+"Draw terminals with the GPU" = "Dibujar los terminales con la GPU";
+"Uses much less CPU while agents are working. Turn it off if text looks wrong." = "Gasta mucha menos CPU mientras los agentes trabajan. Desactívalo si el texto se ve mal.";

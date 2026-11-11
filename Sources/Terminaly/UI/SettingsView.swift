@@ -94,6 +94,7 @@ private struct TerminalSettings: View {
     @AppStorage("terminalFontFamily") private var fontFamily = ""
     @AppStorage("terminalFontSize") private var fontSize = 13.0
     @AppStorage("optionAsMeta") private var optionAsMeta = true
+    @AppStorage("terminalGPU") private var gpu = false
     @AppStorage("notificationsEnabled") private var notifications = true
     @State private var families: [String] = []
 
@@ -124,6 +125,13 @@ private struct TerminalSettings: View {
                 Toggle("Option key sends Meta (Esc+)", isOn: $optionAsMeta)
                 Toggle("Desktop notifications", isOn: $notifications)
             }
+            Section {
+                Toggle("Draw terminals with the GPU", isOn: $gpu)
+            } header: {
+                Text("Performance")
+            } footer: {
+                Text("Uses much less CPU while agents are working. Turn it off if text looks wrong.")
+            }
         }
         .formStyle(.grouped)
         .onAppear { if families.isEmpty { families = TerminalFont.families } }
@@ -131,6 +139,7 @@ private struct TerminalSettings: View {
         .onChange(of: fontFamily) { _, _ in AppStore.shared.terminals.applyPrefs() }
         .onChange(of: fontSize) { _, _ in AppStore.shared.terminals.applyPrefs() }
         .onChange(of: optionAsMeta) { _, _ in AppStore.shared.terminals.applyPrefs() }
+        .onChange(of: gpu) { _, _ in AppStore.shared.terminals.applyPrefs() }
     }
 }
 
