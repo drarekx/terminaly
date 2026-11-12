@@ -90,6 +90,8 @@ struct Session: Identifiable, Codable, Hashable {
     /// Git worktree this session runs in (instead of the project folder), and its branch.
     var worktreePath: String?
     var branch: String?
+    /// The session that started this one (`tly new` run inside it): its workers are grouped under it.
+    var parentID: UUID?
     /// Runtime-only state, not persisted.
     var status: SessionStatus = .starting
     var unread = false
@@ -101,7 +103,7 @@ struct Session: Identifiable, Codable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case id, projectID, title, command, symbol, createdAt, archived, pinned, userTitled, agentSessionID,
-             worktreePath, branch
+             worktreePath, branch, parentID
     }
 
     /// Command that continues the agent's last conversation, when the agent supports it.

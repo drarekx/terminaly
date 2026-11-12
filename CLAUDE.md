@@ -9,8 +9,8 @@ SwiftPM, macOS 14+, Swift 6 toolchain en modo de lenguaje 5 (`swiftLanguageMode(
 | Target | Qué es |
 |---|---|
 | `Terminaly` | App SwiftUI. Renderiza terminales (SwiftTerm `TerminalView`), no es dueña de ningún proceso. |
-| `tly` | Daemon de sesiones (`tly daemon`, se arranca solo) + CLI (`tly ls/new/send/logs/attach/wait/kill/rm/shutdown`) + puente web (`tly web`). |
-| `TerminalyKit` | Protocolo compartido: framing, `Message`, sockets Unix, lanzador del daemon, rutas. |
+| `tly` | Daemon de sesiones (`tly daemon`, se arranca solo) + CLI (`tly ls/new/send/ask/result/logs/attach/wait/kill/rm/shutdown`) + puente web (`tly web`). |
+| `TerminalyKit` | Protocolo compartido: framing, `Message`, sockets Unix, lanzador del daemon, rutas, `Git` (worktrees; lo usan la app y la CLI). |
 
 Dependencias: SwiftTerm (terminal), Sparkle 2 (auto-update). Nada más.
 
@@ -23,6 +23,18 @@ Dependencias: SwiftTerm (terminal), Sparkle 2 (auto-update). Nada más.
 - Consumo: `stats` devuelve memoria (`ri_phys_footprint`) y tiempo de CPU de cada árbol de sesión y del daemon (`TerminalyKit/ProcessStats.swift`, libproc). El % de CPU lo calcula la app entre muestras (`Model/ResourceMonitor.swift`), que solo muestrea mientras una vista lo muestra y la app está activa: pie de la barra lateral (10 s) y popover de recursos (2 s).
 - Se cierra solo tras 60 s sin sesiones vivas ni clientes.
 - Socket: `~/Library/Application Support/Terminaly/tly.sock`, permisos 0600, solo acepta peers con el mismo UID.
+
+### Swarm (workers)
+Plan en `ROADMAP.md` (v0.7). Terminaly no orquesta: el «jefe» es una sesión normal que usa `tly`.
+- **Padre**: `tly new` lee `TERMINALY_SESSION_ID` y lo manda como `parent` (`--no-parent` lo evita). El daemon rechaza el `create` si el padre ya es worker (profundidad 1) o tiene 6 workers vivos (`TERMINALY_MAX_WORKERS` al arrancar el daemon). Un padre que el daemon no conoce se ignora.
+- **Prompt inicial** (`--prompt`): el daemon lo añade al comando como argumento entre comillas (`HostedSession.shellQuote`); `SessionInfo.command` sigue siendo el comando limpio (los presets se reconocen por él). La sesión nace en `working` y `SessionStart` no la pasa a `idle` hasta su primer `Stop`: así `tly wait` no vuelve antes de que responda.
+- **Turnos** (`turns`): +1 en cada `Stop` (o al pasar a `idle` por la heurística). `send` responde con el contador; `tly ask` espera un evento `status` con `turns` mayor, no el estado (que tras un `send` sigue en `idle` hasta que llega `UserPromptSubmit`). `ask` se niega si la sesión está `working`: acabaría antes el turno en curso.
+- **Resultado** (`result`, petición aparte para no engordar `list`): `last_assistant_message` del hook `Stop`; si no viene, el último texto del asistente en `transcript_path`, leído fuera de la cola del daemon. Sin hooks: la salida del turno sin secuencias de escape (hasta 256 KB; trae el eco y el prompt de la shell).
+- **Enter aparte**: `send` con `enter` escribe el texto y, 100 ms después, el `\r`. Juntos, las TUI de agentes lo toman por un pegado y el Enter queda como salto de línea.
+- **Worktree desde la CLI** (`--worktree rama`): lo crea la CLI (git nunca en la cola del daemon) en el repo principal (`Git.mainRepository`, también si se lanza desde otro worktree) y manda `projectPath` y `branch`. `AppStore.adopt` los usa: sin ellos, una carpeta de worktree se adoptaba como proyecto nuevo.
+- App: `Session.parentID` (persistido). La barra lateral aún no anida los workers.
+- `tly wait` y `tly ask` van por eventos (`SyncConnection.nextFrame(before:)`), sin polling. Código de salida de `ask`: 0 respondió, 2 pide respuesta (permiso), 3 tiempo agotado.
+- Paso 9 del self-test.
 
 ### Acceso web (`tly web`, `Sources/tly/WebServer.swift`)
 - Proceso aparte del daemon (un fallo o un navegador lento no puede parar la cola de las sesiones). Sirve `Resources/web` (copiado al `.app` por `bundle.sh`; en desarrollo lo busca subiendo desde el ejecutable) y un WebSocket en `/ws`, en `0.0.0.0:<puerto>` (7878 por defecto). Solo red local/VPN: HTTP sin TLS.
@@ -86,7 +98,7 @@ TERMINALY_STATE_DIR=<dir con state.json> TERMINALY_SNAPSHOT_DIR=<out> build/Term
 ./scripts/release.sh 0.3.0 "notas"            # publica release + appcast (ver abajo)
 ```
 
-- **Verifica siempre con `--selftest`** antes de commitear cambios en store, daemon o protocolo. Cubre: workspaces (y migración si `SELFTEST_EXPECT_LEGACY_PROJECTS=N`), hooks → needsInput, heurística working → idle, reinicio simulado de la app con replay, y pausa (paso 8: CPU parada y reanudada).
+- **Verifica siempre con `--selftest`** antes de commitear cambios en store, daemon o protocolo. Cubre: workspaces (y migración si `SELFTEST_EXPECT_LEGACY_PROJECTS=N`), hooks → needsInput, heurística working → idle, reinicio simulado de la app con replay, pausa (paso 8: CPU parada y reanudada) y swarm (paso 9: worker adoptado bajo su padre, prompt inicial, resultado del turno).
 - Para cambios visuales usa el modo snapshot: no hay permiso de grabación de pantalla, pero la app se pinta a sí misma (`cacheDisplay`). Siembra un `state.json` de prueba en un directorio temporal; nunca uses el estado real del usuario.
 - Usa siempre `TERMINALY_STATE_DIR` en pruebas: si no, tocarías `~/Library/Application Support/Terminaly` (datos reales y el daemon real).
 

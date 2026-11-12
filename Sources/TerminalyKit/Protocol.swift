@@ -81,7 +81,7 @@ public struct FrameDecoder {
 
 /// Flat control message. `type` selects the meaning; unused fields stay nil.
 ///
-/// Requests: hello, list, create, attach, detach, resize, send, kill, remove, logs, pause, continue, stats
+/// Requests: hello, list, create, attach, detach, resize, send, kill, remove, logs, result, pause, continue, stats
 /// Replies echo `reqID`. Events (no reqID): sessions, status, exited, removed
 public struct Message: Codable {
     public var type: String
@@ -108,6 +108,16 @@ public struct Message: Codable {
     /// `stats` reply: usage of each running session's process tree, and of the daemon itself.
     public var usage: [SessionUsage]?
     public var hostUsage: ProcessStats.Usage?
+    /// `create`: the session that started this one, a display name, and a first prompt passed to the command.
+    public var parent: UUID?
+    public var title: String?
+    public var prompt: String?
+    /// `create` in a worktree made outside the app: the repository it belongs to, and its branch.
+    public var projectPath: String?
+    public var branch: String?
+    /// Turns the session has finished. `send` replies with the count at that moment, so the caller
+    /// can wait for the next one instead of racing the status change.
+    public var turns: Int?
 
     public init(type: String, reqID: Int? = nil, id: UUID? = nil) {
         self.type = type
@@ -127,9 +137,15 @@ public struct SessionInfo: Codable, Hashable {
     public var createdAt: Date
     public var permission: Bool?
     public var agentSessionID: String?
+    public var parent: UUID?
+    public var title: String?
+    public var projectPath: String?
+    public var branch: String?
+    public var turns: Int?
 
     public init(id: UUID, command: String, cwd: String, pid: Int32, running: Bool, status: String, exitCode: Int32?, createdAt: Date,
-                permission: Bool? = nil, agentSessionID: String? = nil) {
+                permission: Bool? = nil, agentSessionID: String? = nil, parent: UUID? = nil, title: String? = nil,
+                projectPath: String? = nil, branch: String? = nil, turns: Int? = nil) {
         self.id = id
         self.command = command
         self.cwd = cwd
@@ -140,6 +156,11 @@ public struct SessionInfo: Codable, Hashable {
         self.createdAt = createdAt
         self.permission = permission
         self.agentSessionID = agentSessionID
+        self.parent = parent
+        self.title = title
+        self.projectPath = projectPath
+        self.branch = branch
+        self.turns = turns
     }
 }
 
@@ -154,7 +175,7 @@ public struct SessionUsage: Codable, Hashable, Sendable {
 }
 
 public enum TerminalyPaths {
-    public static let protocolVersion = "2"
+    public static let protocolVersion = "3"
 
     public static var stateDir: URL {
         let dir = ProcessInfo.processInfo.environment["TERMINALY_STATE_DIR"].map { URL(fileURLWithPath: $0) }

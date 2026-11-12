@@ -58,6 +58,21 @@ Pendiente: ver y controlar las sesiones de otro Mac de la misma red como si fuer
 | ✅ ★ | Pausar sesiones y ver el consumo | Pausar/continuar (SIGSTOP al árbol de procesos) y «Detener» para liberar memoria. En el pie de la barra lateral: sesiones abiertas, memoria y CPU; al pulsar, detalle por sesión con la app y el daemon. | M |
 | | Coste y tokens | Mostrar el coste y los tokens por sesión cuando el agente los reporte en sus hooks. | M |
 
+## v0.7 — Swarm ★
+
+Varios agentes trabajando a la vez bajo un agente «jefe». Terminaly no orquesta: da las primitivas y el jefe (una sesión normal) decide. Sin LLM ni procesos nuevos en el daemon.
+
+| | Funcionalidad | Qué y por qué | Esfuerzo |
+|---|---|---|---|
+| ✅ | Primitivas en `tly` | `tly new --prompt --worktree --title` (la sesión lanzada desde dentro de otra queda como su worker), `tly ask` (envía, espera el turno y devuelve la respuesta), `tly result`, `tly wait` con varias sesiones y `--any`, `kill/rm --tree`. Turnos contados en el daemon: ya no hay carrera entre `send` y `wait`. Límites: un worker no lanza workers y máximo 6 por jefe. | M |
+| | Workers en la barra lateral | Anidados bajo su jefe y plegables, con resumen en la fila del jefe («3 trabajando · 1 pide respuesta»). También en la web. | M |
+| | Ver el swarm | Abrir los workers de un jefe en rejilla de paneles. | S |
+| | Limpieza | «Quitar workers terminados»: los borra y quita sus worktrees (sin forzar; la rama se conserva). | S |
+| | Skill para el jefe | Skill `terminaly-swarm` instalable desde Ajustes: enseña al agente a dividir, lanzar en worktrees, esperar, revisar e integrar con `tly`. | S |
+| | Límite configurable | Máximo de workers por jefe en Ajustes (hoy `TERMINALY_MAX_WORKERS` al arrancar el daemon). | S |
+
+Los permisos de un worker los aprueba la persona (barra y notificación de siempre), no el jefe. Fuera de alcance por ahora: mensajes entre workers, memoria compartida y merge automático de ramas.
+
 ## Infraestructura (continua)
 
 - **Firma Developer ID y notarización**: elimina el aviso de Gatekeeper en la primera instalación. Necesita una cuenta de Apple Developer.

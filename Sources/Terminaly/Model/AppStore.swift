@@ -72,16 +72,33 @@ final class AppStore {
     /// a session of the project with that folder, named after the matching preset.
     func adopt(_ info: SessionInfo) {
         guard session(info.id) == nil else { return }
-        let project = projects.first { $0.path == info.cwd } ?? addProject(at: URL(fileURLWithPath: info.cwd))
+        let project = adoptionProject(for: info)
         let preset = presets.first { $0.command == info.command }
         let n = sessions.filter { $0.projectID == project.id && $0.command == info.command }.count + 1
         let label = preset?.label ?? (info.command.isEmpty ? "Shell" : info.command)
-        sessions.append(Session(id: info.id, projectID: project.id,
-                                title: n > 1 ? "\(label) \(n)" : label,
-                                command: info.command,
-                                symbol: preset?.symbol ?? "terminal",
-                                createdAt: info.createdAt))
+        var s = Session(id: info.id, projectID: project.id,
+                        title: info.title ?? (n > 1 ? "\(label) \(n)" : label),
+                        command: info.command,
+                        symbol: preset?.symbol ?? "terminal",
+                        createdAt: info.createdAt)
+        s.userTitled = info.title != nil
+        s.parentID = info.parent
+        // Not in the project folder: a worktree (its own, or the one of the session that started it).
+        if info.cwd != project.path {
+            s.worktreePath = info.cwd
+            s.branch = info.branch ?? sessions.first { $0.worktreePath == info.cwd }?.branch
+        }
+        sessions.append(s)
         scheduleSave()
+    }
+
+    /// A worktree folder is not a project: the session belongs to the repository's project,
+    /// which the host names, or which a known session in that folder shows.
+    private func adoptionProject(for info: SessionInfo) -> Project {
+        if let p = projects.first(where: { $0.path == info.cwd }) { return p }
+        if let path = info.projectPath { return addProject(at: URL(fileURLWithPath: path)) }
+        if let s = sessions.first(where: { $0.worktreePath == info.cwd }), let p = project(s.projectID) { return p }
+        return addProject(at: URL(fileURLWithPath: info.cwd))
     }
 
     // MARK: Lookup

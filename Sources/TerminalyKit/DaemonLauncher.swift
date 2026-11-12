@@ -81,6 +81,23 @@ public final class SyncConnection {
         return try readFrame()
     }
 
+    /// Next event, or nil once `deadline` passes.
+    public func nextFrame(before deadline: Date) throws -> Frame? {
+        if !events.isEmpty { return events.removeFirst() }
+        if !incoming.isEmpty { return incoming.removeFirst() }
+        while true {
+            let left = deadline.timeIntervalSinceNow
+            guard left > 0 else { return nil }
+            var p = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+            let rc = poll(&p, 1, Int32(min(left * 1000, 60_000).rounded(.up)))
+            if rc > 0 { return try readFrame() }
+            if rc < 0 && errno != EINTR { throw UnixSocket.SocketError.sys("poll", errno) }
+        }
+    }
+
+    /// Forgets events that arrived before the last reply: they describe state older than that reply.
+    public func discardEvents() { events.removeAll() }
+
     private func readFrame() throws -> Frame {
         if !incoming.isEmpty { return incoming.removeFirst() }
         var buf = [UInt8](repeating: 0, count: 65536)

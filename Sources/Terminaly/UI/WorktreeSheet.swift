@@ -1,4 +1,5 @@
 import SwiftUI
+import TerminalyKit
 
 /// "New Session in Worktree": branch name + preset, then `git worktree add`.
 struct WorktreeSheet: View {

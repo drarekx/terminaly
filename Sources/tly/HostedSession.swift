@@ -8,6 +8,17 @@ final class HostedSession {
     let command: String
     let cwd: String
     let createdAt = Date()
+    /// Swarm: who started this session, its display name, and the prompt its command was started with.
+    let parent: UUID?
+    let title: String?
+    let prompt: String?
+    let projectPath: String?
+    let branch: String?
+    /// Finished turns, and what the agent said (or the shell printed) in the last one.
+    private(set) var turns = 0
+    private(set) var result: String?
+    private var turnOutput: [UInt8] = []
+    private var hookSeq = 0
     private(set) var pid: pid_t = 0
     private(set) var running = false
     private(set) var exitCode: Int32?
@@ -32,17 +43,26 @@ final class HostedSession {
     var onStatus: ((HostedSession, _ detail: String?, _ notify: Bool) -> Void)?
     var onExit: ((HostedSession) -> Void)?
 
-    init(id: UUID, command: String, cwd: String, queue: DispatchQueue) {
+    init(id: UUID, command: String, cwd: String, queue: DispatchQueue, parent: UUID? = nil, title: String? = nil,
+         prompt: String? = nil, projectPath: String? = nil, branch: String? = nil) {
         self.id = id
         self.command = command
         self.cwd = cwd
         self.queue = queue
+        self.parent = parent
+        self.title = title
+        self.prompt = prompt
+        self.projectPath = projectPath
+        self.branch = branch
+        // It starts with work to do: "idle" must mean the prompt was answered, not that the agent just opened.
+        if prompt != nil { status = "working" }
     }
 
     var info: SessionInfo {
         SessionInfo(id: id, command: command, cwd: cwd, pid: pid, running: running,
                     status: status, exitCode: exitCode, createdAt: createdAt,
-                    permission: permissionPending, agentSessionID: agentSessionID)
+                    permission: permissionPending, agentSessionID: agentSessionID, parent: parent, title: title,
+                    projectPath: projectPath, branch: branch, turns: turns)
     }
 
     var replay: [UInt8] { ring.contents }
@@ -54,7 +74,8 @@ final class HostedSession {
         var args = ["-\(shellName)"]  // argv[0] with leading dash = login shell
         if !command.isEmpty {
             // Interactive so aliases resolve; fall back to a shell when the command exits.
-            args += ["-i", "-c", "\(command); exec \(shell) -l"]
+            let line = prompt.map { "\(command) \(Self.shellQuote($0))" } ?? command
+            args += ["-i", "-c", "\(line); exec \(shell) -l"]
         }
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
@@ -86,6 +107,10 @@ final class HostedSession {
         return true
     }
 
+    static func shellQuote(_ s: String) -> String {
+        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
     private func readAvailable() {
         var buf = [UInt8](repeating: 0, count: 65536)
         while true {
@@ -93,6 +118,7 @@ final class HostedSession {
             if n > 0 {
                 let slice = buf[0..<n]
                 ring.append(slice)
+                if !hookDriven { captureTurnOutput(slice) }
                 onOutput?(self, slice)
                 outputActivity()
                 if n < 65536 { return }
@@ -227,7 +253,11 @@ final class HostedSession {
         guard !hookDriven, running, !paused else { return }
         if status != "working" { setStatus("working") }
         quietTimer?.cancel()
-        let item = DispatchWorkItem { [weak self] in self?.setStatus("idle") }
+        let item = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            let text = Self.plainText(self.turnOutput)
+            self.finishTurn(result: text.isEmpty ? nil : text, idle: true)
+        }
         quietTimer = item
         queue.asyncAfter(deadline: .now() + 2, execute: item)
     }
@@ -235,6 +265,8 @@ final class HostedSession {
     func hookEvent(_ event: String, payload: [String: Any]) {
         guard running, !paused else { return }
         hookDriven = true
+        hookSeq += 1
+        turnOutput.removeAll()
         quietTimer?.cancel()
         if let sid = payload["session_id"] as? String, !sid.isEmpty { agentSessionID = sid }
         switch event {
@@ -251,9 +283,28 @@ final class HostedSession {
             // and "…waiting for your input" when idle.
             permissionPending = permissionPending || (message?.localizedCaseInsensitiveContains("permission") ?? false)
             setStatus("needsInput", detail: message)
-        case "Stop", "SessionStart":
+        case "Stop":
             permissionPending = false
-            setStatus("idle")
+            if let text = payload["last_assistant_message"] as? String {
+                finishTurn(result: text, idle: true)
+            } else if let path = payload["transcript_path"] as? String {
+                // Older agents only give the transcript; reading it must not hold the daemon queue.
+                let seq = hookSeq
+                DispatchQueue.global(qos: .utility).async { [weak self] in
+                    let text = Transcript.lastAssistantText(path)
+                    self?.queue.async {
+                        guard let self else { return }
+                        // A prompt sent meanwhile already moved the status on.
+                        self.finishTurn(result: text, idle: self.hookSeq == seq)
+                    }
+                }
+            } else {
+                finishTurn(result: nil, idle: true)
+            }
+        case "SessionStart":
+            permissionPending = false
+            // Started with a prompt: still on its first turn, which ends with Stop.
+            if prompt == nil || turns > 0 { setStatus("idle") }
         case "SessionEnd":
             hookDriven = false
         default:
@@ -261,10 +312,40 @@ final class HostedSession {
         }
     }
 
-    private func setStatus(_ new: String, detail: String? = nil, quiet: Bool = false) {
+    /// The status event of a finished turn always goes out: waiters watch the turn count, not the status.
+    private func finishTurn(result: String?, idle: Bool) {
+        guard running else { return }
+        turns += 1
+        self.result = result
+        turnOutput.removeAll()
+        if idle && !paused {
+            setStatus("idle", force: true)
+        } else {
+            onStatus?(self, detail, false)
+        }
+    }
+
+    private static let maxTurnOutput = 256 * 1024
+
+    private func captureTurnOutput(_ bytes: ArraySlice<UInt8>) {
+        turnOutput.append(contentsOf: bytes)
+        if turnOutput.count > Self.maxTurnOutput * 2 { turnOutput.removeFirst(turnOutput.count - Self.maxTurnOutput) }
+    }
+
+    private static let escapes = try! NSRegularExpression(
+        pattern: "\u{1B}\\[[0-9;?<=>]*[ -/]*[@-~]|\u{1B}\\][^\u{07}\u{1B}]*(?:\u{07}|\u{1B}\\\\)?|\u{1B}[()][0-9A-Za-z]|\u{1B}[@-Z\\\\^_=>]|[\\x00-\\x08\\x0B-\\x1F\\x7F]")
+
+    /// Terminal output without escape sequences or control characters.
+    static func plainText(_ bytes: [UInt8]) -> String {
+        let raw = String(decoding: bytes, as: UTF8.self)
+        let text = escapes.stringByReplacingMatches(in: raw, range: NSRange(raw.startIndex..., in: raw), withTemplate: "")
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func setStatus(_ new: String, detail: String? = nil, quiet: Bool = false, force: Bool = false) {
         let old = status
         self.detail = detail
-        if old == new && new != "needsInput" { return }
+        if old == new && new != "needsInput" && !force { return }
         status = new
         // Notifications only for hook-driven sessions; output heuristics are too noisy.
         let notify = !quiet && hookDriven && (new == "needsInput" || (new == "idle" && old == "working"))
@@ -299,5 +380,25 @@ struct RingBuffer {
 
     var contents: [UInt8] {
         storage.count < capacity ? storage : Array(storage[head...] + storage[..<head])
+    }
+}
+
+/// Reads an agent transcript (JSON lines) for sessions whose Stop hook doesn't carry the last message.
+enum Transcript {
+    static func lastAssistantText(_ path: String) -> String? {
+        guard let fh = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? fh.close() }
+        let size = (try? fh.seekToEnd()) ?? 0
+        let tail: UInt64 = 512 * 1024
+        try? fh.seek(toOffset: size > tail ? size - tail : 0)
+        guard let data = try? fh.readToEnd() else { return nil }
+        for line in data.split(separator: UInt8(ascii: "\n")).reversed() {
+            guard let obj = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any],
+                  obj["type"] as? String == "assistant",
+                  let content = (obj["message"] as? [String: Any])?["content"] as? [[String: Any]] else { continue }
+            let text = content.compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }.joined(separator: "\n")
+            if !text.isEmpty { return text }
+        }
+        return nil
     }
 }

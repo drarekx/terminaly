@@ -13,6 +13,8 @@ final class Daemon {
     private var idleSince = Date()
     private var idleTimer: DispatchSourceTimer?
     static let idleExitSeconds: TimeInterval = 60
+    /// Running sessions one session may have started: a runaway agent must not fill the machine with agents.
+    static let maxWorkers = Int(ProcessInfo.processInfo.environment["TERMINALY_MAX_WORKERS"] ?? "") ?? 6
 
     func run() -> Never {
         signal(SIGPIPE, SIG_IGN)
@@ -136,7 +138,25 @@ final class Daemon {
                 reply.error = "session already running"
                 break
             }
-            let s = HostedSession(id: id, command: msg.command ?? "", cwd: msg.cwd ?? NSHomeDirectory(), queue: queue)
+            // A parent this host doesn't know (older run, removed session) is no parent.
+            let parent = msg.parent.flatMap { sessions[$0] }
+            if let parent {
+                if parent.parent != nil {
+                    reply.error = "a worker session cannot start workers"
+                    break
+                }
+                if sessions.values.filter({ $0.running && $0.parent == parent.id }).count >= Self.maxWorkers {
+                    reply.error = "worker limit reached (\(Self.maxWorkers) running): wait for one to finish or kill it"
+                    break
+                }
+            }
+            if msg.prompt != nil && (msg.command ?? "").isEmpty {
+                reply.error = "a prompt needs a command"
+                break
+            }
+            let s = HostedSession(id: id, command: msg.command ?? "", cwd: msg.cwd ?? NSHomeDirectory(), queue: queue,
+                                  parent: parent?.id, title: msg.title, prompt: msg.prompt,
+                                  projectPath: msg.projectPath, branch: msg.branch)
             wire(s)
             guard s.start(cols: msg.cols ?? 80, rows: msg.rows ?? 24, hookPort: hooks.port, hookToken: hooks.token) else {
                 reply.error = "spawn failed"
@@ -166,9 +186,15 @@ final class Daemon {
 
         case "send":
             guard let id = msg.id, let s = sessions[id] else { reply.error = "no such session"; break }
-            var text = msg.text ?? ""
-            if msg.enter == true { text += "\r" }
+            let text = msg.text ?? ""
             s.write(Array(text.utf8))
+            if msg.enter == true {
+                // Agent TUIs take text and Enter arriving together as a paste, where Enter is a newline.
+                let delay: Double = text.isEmpty ? 0 : 0.1
+                queue.asyncAfter(deadline: .now() + delay) { [weak s] in s?.write([13]) }
+            }
+            reply.turns = s.turns
+            reply.status = s.status
 
         case "kill":
             guard let id = msg.id, let s = sessions[id] else { reply.error = "no such session"; break }
@@ -199,6 +225,12 @@ final class Daemon {
             let lines = text.components(separatedBy: "\n").suffix(msg.lines ?? 200)
             reply.text = lines.joined(separator: "\n")
 
+        case "result":
+            guard let id = msg.id, let s = sessions[id] else { reply.error = "no such session"; break }
+            reply.text = s.result
+            reply.turns = s.turns
+            reply.status = s.status
+
         case "shutdown":
             client.send(Frame.json(reply))
             shutdown()
@@ -224,6 +256,7 @@ final class Daemon {
             m.exitCode = session.exitCode
             m.permission = session.permissionPending
             m.agentSessionID = session.agentSessionID
+            m.turns = session.turns
             self?.broadcast(m)
         }
         s.onExit = { [weak self] session in

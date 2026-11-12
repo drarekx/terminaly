@@ -33,6 +33,8 @@ Native macOS app (SwiftUI + SwiftTerm) for running and steering CLI agent sessio
 ```sh
 ln -s "$PWD/build/Terminaly.app/Contents/MacOS/tly" /usr/local/bin/tly
 tly ls · tly new --command claude · tly send <id> "text" --enter · tly logs <id>
+tly new --command claude --worktree fix-tests --prompt "Fix the failing tests" (a worker, when run inside a session)
+tly ask <id> "text" (send, wait for the turn, print the answer) · tly result <id> · tly wait <id>... [--any]
 tly attach <id> (Ctrl-\ detaches) · tly wait <id> · tly kill|rm <id> · tly shutdown
 ```
 

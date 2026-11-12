@@ -5,7 +5,7 @@ import TerminalyKit
 /// 1. a session fires the Claude hook command → status needsInput
 /// 2. a session without hooks → working, then idle after output stops
 /// 3. simulated app relaunch → session still alive in the host, output replayed into a fresh view
-/// …and later steps for panes, permissions, worktrees and pausing (see the numbered prints).
+/// …and later steps for panes, permissions, worktrees, pausing and swarm workers (see the numbered prints).
 @MainActor
 enum SelfTest {
     static func run() {
@@ -155,7 +155,47 @@ enum SelfTest {
         print("8 pause: paused=\(paused) still=\(still) continued=\(continued) burning=\(burning)")
         guard paused && still && continued && burning else { return finish(false, "pause") }
 
+        // 9. Swarm: a session started from inside another one (`tly new`) is adopted as its worker,
+        // its prompt reaches the command, and a turn has a result.
+        let stop = ClaudeHookInstaller.command(for: "Stop")
+        let agent = "f() { echo \"{\\\"last_assistant_message\\\":\\\"A:$1\\\"}\" | ( \(stop) ); }; f"
+        let created = await tly(["new", "--cwd", project.path, "--command", agent, "--prompt", "swarm", "--title", "Worker"],
+                                parent: busy.id)
+        let worker = UUID(uuidString: created.out)
+        let adopted = await waitUntil(5) {
+            guard let s = store.session(worker) else { return false }
+            return s.parentID == busy.id && s.title == "Worker" && s.projectID == project.id
+        }
+        _ = await tly(["wait", created.out, "--timeout", "10"])
+        let answer = await tly(["result", created.out]).out
+        let nested = await tly(["new", "--cwd", project.path], parent: worker)
+        let asked = await tly(["ask", busy.id.uuidString, "x", "--timeout", "1"])
+        print("9 swarm: adopted=\(adopted) result=\(answer == "A:swarm") noNesting=\(nested.code != 0) askTimeout=\(asked.code == 3)")
+        guard adopted && answer == "A:swarm" && nested.code != 0 && asked.code == 3 else { return finish(false, "swarm") }
+
         finish(true, "")
+    }
+
+    /// Runs the `tly` CLI as a session would (`parent` = the session it runs in).
+    private static func tly(_ args: [String], parent: UUID? = nil) async -> (out: String, code: Int32) {
+        await withCheckedContinuation { cont in
+            DispatchQueue.global().async {
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: DaemonClient.tlyPath)
+                p.arguments = args
+                var env = ProcessInfo.processInfo.environment
+                env["TERMINALY_SESSION_ID"] = parent?.uuidString
+                p.environment = env
+                let out = Pipe()
+                p.standardOutput = out
+                p.standardError = Pipe()
+                guard (try? p.run()) != nil else { return cont.resume(returning: ("", -1)) }
+                let data = out.fileHandleForReading.readDataToEndOfFile()
+                p.waitUntilExit()
+                cont.resume(returning: (String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines),
+                                        p.terminationStatus))
+            }
+        }
     }
 
     private static func cpuTime(_ store: AppStore, _ id: UUID) async -> UInt64 {
