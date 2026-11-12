@@ -81,6 +81,9 @@ final class HostedSession {
         env["COLORTERM"] = "truecolor"
         env["TERM_PROGRAM"] = "Terminaly"
         env["TERMINALY_SESSION_ID"] = id.uuidString
+        // Agents drive their workers with `tly`; last in PATH so it never shadows anything.
+        let bin = URL(fileURLWithPath: selfPath).deletingLastPathComponent().path
+        env["PATH"] = (env["PATH"].map { "\($0):" } ?? "/usr/bin:/bin:") + bin
         if let hookPort {
             env["TERMINALY_HOOK_PORT"] = String(hookPort)
             env["TERMINALY_HOOK_TOKEN"] = hookToken

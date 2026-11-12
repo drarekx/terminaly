@@ -226,3 +226,15 @@
 "Deletes %lld sessions that are ready or have exited, and their worktrees. Branches are kept. A worktree with uncommitted changes stays, with its session." = "Elimina %lld sesiones que están listas o han terminado, y sus worktrees. Las ramas se conservan. Un worktree con cambios sin commit se queda, con su sesión.";
 "%lld workers were kept" = "Se han conservado %lld workers";
 "Their worktrees have uncommitted changes." = "Sus worktrees tienen cambios sin commit.";
+
+"Swarm" = "Swarm";
+"Swarm skill" = "Skill de swarm";
+"Update available" = "Hay una versión nueva";
+"Teaches Claude Code to split a big task among worker sessions, each in its own git worktree, and to review and merge their work. Ask the agent for a swarm, or type /terminaly-swarm. Installed in ~/.claude/skills." = "Enseña a Claude Code a repartir una tarea grande entre sesiones worker, cada una en su propio worktree de git, y a revisar e integrar su trabajo. Pídele un swarm al agente o escribe /terminaly-swarm. Se instala en ~/.claude/skills.";
+"Install Skill" = "Instalar skill";
+"Update Skill" = "Actualizar skill";
+"Remove Skill" = "Quitar skill";
+"Workers per session: %lld" = "Workers por sesión: %lld";
+"How many workers one session may have running at once. A worker cannot start workers of its own." = "Cuántos workers puede tener en marcha una sesión a la vez. Un worker no puede lanzar workers propios.";
+"Up to date" = "Al día";
+"Not set up" = "Sin instalar";

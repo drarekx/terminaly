@@ -13,8 +13,6 @@ final class Daemon {
     private var idleSince = Date()
     private var idleTimer: DispatchSourceTimer?
     static let idleExitSeconds: TimeInterval = 60
-    /// Running sessions one session may have started: a runaway agent must not fill the machine with agents.
-    static let maxWorkers = Int(ProcessInfo.processInfo.environment["TERMINALY_MAX_WORKERS"] ?? "") ?? 6
 
     func run() -> Never {
         signal(SIGPIPE, SIG_IGN)
@@ -145,8 +143,11 @@ final class Daemon {
                     reply.error = "a worker session cannot start workers"
                     break
                 }
-                if sessions.values.filter({ $0.running && $0.parent == parent.id }).count >= Self.maxWorkers {
-                    reply.error = "worker limit reached (\(Self.maxWorkers) running): wait for one to finish or kill it"
+                // A runaway agent must not fill the machine with agents. Read here (a small local file,
+                // only when a worker starts) so the setting applies without restarting the host.
+                let limit = DaemonConfig.effectiveMaxWorkers
+                if sessions.values.filter({ $0.running && $0.parent == parent.id }).count >= limit {
+                    reply.error = "worker limit reached (\(limit) running): wait for one to finish or kill it"
                     break
                 }
             }

@@ -68,8 +68,8 @@ public enum Git {
             .path
     }
 
-    /// Creates the worktree on a new branch from HEAD, or checks out an existing branch.
-    public static func addWorktreeSync(repo: String, branch: String) throws -> String {
+    /// Creates the worktree on a new branch from `base` (HEAD of `repo` when nil), or checks out an existing branch.
+    public static func addWorktreeSync(repo: String, branch: String, base: String? = nil) throws -> String {
         let path = worktreePath(repo: repo, branch: branch)
         try runSync(["check-ref-format", "--branch", branch], in: repo)
         let exists = (try? runSync(["show-ref", "--verify", "--quiet", "refs/heads/\(branch)"], in: repo)) != nil
@@ -78,7 +78,7 @@ public enum Git {
         if exists {
             try runSync(["worktree", "add", path, branch], in: repo)
         } else {
-            try runSync(["worktree", "add", "-b", branch, path], in: repo)
+            try runSync(["worktree", "add", "-b", branch, path] + (base.map { [$0] } ?? []), in: repo)
         }
         return path
     }

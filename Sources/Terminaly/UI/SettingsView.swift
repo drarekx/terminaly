@@ -1,4 +1,5 @@
 import SwiftUI
+import TerminalyKit
 
 struct SettingsView: View {
     @State private var tab = ProcessInfo.processInfo.environment["TERMINALY_SETTINGS_TAB"] ?? "presets"
@@ -50,6 +51,9 @@ private struct PresetsSettings: View {
 private struct IntegrationsSettings: View {
     @State private var installed = ClaudeHookInstaller.isInstalled
     @State private var error: String?
+    @State private var skill = SwarmSkillInstaller.state()
+    @State private var skillError: String?
+    @State private var maxWorkers = DaemonConfig.load().maxWorkers ?? DaemonConfig.defaultMaxWorkers
 
     var body: some View {
         Form {
@@ -70,12 +74,57 @@ private struct IntegrationsSettings: View {
                 }
                 if let error { Text(error).foregroundStyle(.red).font(.caption) }
             }
+            Section("Swarm") {
+                LabeledContent("Swarm skill") {
+                    switch skill {
+                    case .current: Text("Up to date").foregroundStyle(.green)
+                    case .outdated: Text("Update available").foregroundStyle(SessionStatus.needsInput.text)
+                    case .missing: Text("Not set up").foregroundStyle(.secondary)
+                    }
+                }
+                Text("Teaches Claude Code to split a big task among worker sessions, each in its own git worktree, and to review and merge their work. Ask the agent for a swarm, or type /terminaly-swarm. Installed in ~/.claude/skills.")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    if skill != .current {
+                        Button(skill == .outdated ? LocalizedStringKey("Update Skill") : LocalizedStringKey("Install Skill")) {
+                            runSkill { try SwarmSkillInstaller.install() }
+                        }
+                    }
+                    if skill != .missing {
+                        Button("Remove Skill") { runSkill { try SwarmSkillInstaller.uninstall() } }
+                    }
+                }
+                if let skillError { Text(skillError).foregroundStyle(.red).font(.caption) }
+                Stepper("Workers per session: \(maxWorkers)", value: $maxWorkers, in: DaemonConfig.maxWorkersRange)
+                    .onChange(of: maxWorkers) { _, n in
+                        var config = DaemonConfig.load()
+                        config.maxWorkers = n
+                        do {
+                            try config.save()
+                            skillError = nil
+                        } catch {
+                            skillError = error.localizedDescription
+                        }
+                    }
+                Text("How many workers one session may have running at once. A worker cannot start workers of its own.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Other agents") {
                 Text("Sessions without hooks use output activity: Working while output flows, Ready after 2 s of silence. Notifications are only sent for hook-driven sessions.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func runSkill(_ op: () throws -> Void) {
+        do {
+            try op()
+            skillError = nil
+        } catch {
+            skillError = error.localizedDescription
+        }
+        skill = SwarmSkillInstaller.state()
     }
 
     private func run(_ op: () throws -> Void) {

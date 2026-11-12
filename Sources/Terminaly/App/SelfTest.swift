@@ -170,8 +170,19 @@ enum SelfTest {
         let answer = await tly(["result", created.out]).out
         let nested = await tly(["new", "--cwd", project.path], parent: worker)
         let asked = await tly(["ask", busy.id.uuidString, "x", "--timeout", "1"])
-        print("9 swarm: adopted=\(adopted) result=\(answer == "A:swarm") noNesting=\(nested.code != 0) askTimeout=\(asked.code == 3)")
-        guard adopted && answer == "A:swarm" && nested.code != 0 && asked.code == 3 else { return finish(false, "swarm") }
+        // The limit set in Settings applies to a host that is already running.
+        let previous = DaemonConfig.load()
+        try? DaemonConfig(maxWorkers: 1).save()
+        let overLimit = await tly(["new", "--cwd", project.path], parent: busy.id)
+        try? previous.save()
+        let skills = TerminalyPaths.stateDir.appendingPathComponent("selftest-skills")
+        try? SwarmSkillInstaller.install(in: skills)
+        let skillOK = SwarmSkillInstaller.state(in: skills) == .current
+        try? SwarmSkillInstaller.uninstall(in: skills)
+        let skillGone = SwarmSkillInstaller.state(in: skills) == .missing
+        print("9 swarm: adopted=\(adopted) result=\(answer == "A:swarm") noNesting=\(nested.code != 0) askTimeout=\(asked.code == 3) limit=\(overLimit.code != 0) skill=\(skillOK && skillGone)")
+        guard adopted && answer == "A:swarm" && nested.code != 0 && asked.code == 3 && overLimit.code != 0
+                && skillOK && skillGone else { return finish(false, "swarm") }
 
         finish(true, "")
     }

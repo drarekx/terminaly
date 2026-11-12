@@ -159,7 +159,9 @@ case "new":
         guard !branch.isEmpty else { fail("invalid branch name \(worktree)") }
         do {
             let repo = try Git.mainRepository(of: m.cwd!)
-            m.cwd = try Git.addWorktreeSync(repo: repo, branch: branch)
+            // From the commit of the folder it is launched in: a lead in its own worktree hands its work on.
+            let head = try? Git.runSync(["rev-parse", "--verify", "HEAD"], in: m.cwd!)
+            m.cwd = try Git.addWorktreeSync(repo: repo, branch: branch, base: head)
             m.projectPath = repo
             m.branch = branch
         } catch {

@@ -38,6 +38,8 @@ tly ask <id> "text" (send, wait for the turn, print the answer) · tly result <i
 tly attach <id> (Ctrl-\ detaches) · tly wait <id> · tly kill|rm <id> · tly shutdown
 ```
 
+**Swarm**: install the `terminaly-swarm` skill from Settings → Agents and ask Claude Code for a swarm. The agent splits the task among worker sessions (each in its own git worktree, nested under it in the sidebar), then reviews and merges their branches. Terminaly only provides the primitives above; permissions are still approved by you.
+
 ## Install
 
 ```sh
