@@ -64,9 +64,9 @@ struct AppCommands: Commands {
             Divider()
             Button("Rename Session…") { store.renamingSessionID = store.selectedSessionID }
                 .disabled(store.selectedSessionID == nil)
-            Button("Restart Session") { store.selectedSessionID.map(store.restart) }
+            Button("Restart Session") { store.selectedSessionID.map(store.confirmRestart) }
                 .disabled(store.selectedSessionID == nil)
-            Button("Archive Session") { store.selectedSessionID.map(store.archive) }
+            Button("Archive Session") { store.selectedSessionID.map(store.confirmArchive) }
                 .keyboardShortcut(.delete, modifiers: [.command, .shift])
                 .disabled(store.selectedSessionID == nil)
             Divider()

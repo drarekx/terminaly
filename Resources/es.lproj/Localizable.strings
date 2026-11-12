@@ -243,3 +243,10 @@
 "Install Plugin" = "Instalar plugin";
 "Update Plugin" = "Actualizar plugin";
 "Remove Plugin" = "Quitar plugin";
+"Running sessions that will be stopped: %lld." = "Sesiones en marcha que se detendrán: %lld.";
+"Remove project “%@”?" = "¿Quitar el proyecto «%@»?";
+"Its sessions are deleted. Running sessions that will be stopped: %lld." = "Se eliminan sus sesiones. Sesiones en marcha que se detendrán: %lld.";
+"Archive “%@”?" = "¿Archivar «%@»?";
+"The agent is working or waiting for your answer. Archiving stops it." = "El agente está trabajando o esperando tu respuesta. Al archivar se detiene.";
+"Restart “%@”?" = "¿Reiniciar «%@»?";
+"The agent is working or waiting for your answer. Restarting stops it and starts a new process." = "El agente está trabajando o esperando tu respuesta. Al reiniciar se detiene y arranca un proceso nuevo.";
