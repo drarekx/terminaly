@@ -535,6 +535,67 @@ extension AppStore {
             update(s.id) { $0.status = .exited }
         }
     }
+
+    /// Deletes the session, asking first if its process is still running.
+    func confirmDeleteSession(_ id: UUID) {
+        guard let s = session(id) else { return }
+        let running = terminals.isRunning(id) ? 1 : 0
+        if running > 0 {
+            let alert = NSAlert()
+            alert.messageText = String(localized: "Delete “\(s.title)”?")
+            alert.informativeText = String(localized: "Running sessions that will be stopped: \(running).")
+            alert.addButton(withTitle: String(localized: "Delete"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        deleteSession(id)
+    }
+
+    /// Removes the project and its sessions, asking first if any of them is still running.
+    func confirmRemoveProject(_ project: Project) {
+        let running = sessions.filter { $0.projectID == project.id && terminals.isRunning($0.id) }.count
+        if running > 0 {
+            let alert = NSAlert()
+            alert.messageText = String(localized: "Remove project “\(project.name)”?")
+            alert.informativeText = String(localized: "Its sessions are deleted. Running sessions that will be stopped: \(running).")
+            alert.addButton(withTitle: String(localized: "Remove"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        removeProject(project)
+    }
+
+    /// Archives the session, asking first if the agent is in the middle of a turn or waiting for an answer.
+    func confirmArchive(_ id: UUID) {
+        guard let s = session(id) else { return }
+        if isBusy(s) {
+            let alert = NSAlert()
+            alert.messageText = String(localized: "Archive “\(s.title)”?")
+            alert.informativeText = String(localized: "The agent is working or waiting for your answer. Archiving stops it.")
+            alert.addButton(withTitle: String(localized: "Archive"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        archive(id)
+    }
+
+    /// Restarts the session, asking first if the agent is in the middle of a turn or waiting for an answer.
+    func confirmRestart(_ id: UUID) {
+        guard let s = session(id) else { return }
+        if isBusy(s) {
+            let alert = NSAlert()
+            alert.messageText = String(localized: "Restart “\(s.title)”?")
+            alert.informativeText = String(localized: "The agent is working or waiting for your answer. Restarting stops it and starts a new process.")
+            alert.addButton(withTitle: String(localized: "Restart"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        restart(id)
+    }
+
+    private func isBusy(_ s: Session) -> Bool {
+        (s.status == .working || s.status == .needsInput) && terminals.isRunning(s.id)
+    }
 }
 
 // MARK: Workspaces
@@ -720,7 +781,8 @@ extension AppStore {
     /// Removes the session's worktree (refuses if it has uncommitted changes) and the session.
     func removeWorktree(of id: UUID) async throws {
         guard let s = session(id), let path = s.worktreePath, let p = project(s.projectID) else { return }
-        terminals.stop(id)
+        // The process is only stopped (by deleteSession) once git has removed the folder: when git
+        // refuses, the agent keeps running untouched.
         try await Git.removeWorktree(repo: p.path, path: path)
         deleteSession(id)
     }

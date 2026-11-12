@@ -100,7 +100,7 @@ private struct WorkspacePage: View {
                             selectableRow(session)
                                 .contextMenu {
                                     Button("Restore") { store.show(session.id) }
-                                    Button("Delete", role: .destructive) { store.deleteSession(session.id) }
+                                    Button("Delete", role: .destructive) { store.confirmDeleteSession(session.id) }
                                 }
                         }
                     } header: {
@@ -156,7 +156,7 @@ private struct WorkspacePage: View {
     private func sessionMenu(_ session: Session) -> some View {
         Button("Rename…") { store.renamingSessionID = session.id }
         Button(session.pinned ? "Unpin" : "Pin") { store.togglePinned(session.id) }
-        Button("Restart") { store.restart(session.id) }
+        Button("Restart") { store.confirmRestart(session.id) }
         if store.terminals.isRunning(session.id) {
             if session.status == .paused {
                 Button("Continue") { store.unpause(session.id) }
@@ -177,8 +177,8 @@ private struct WorkspacePage: View {
             }
         }
         Divider()
-        Button("Archive") { store.archive(session.id) }
-        Button("Delete", role: .destructive) { store.deleteSession(session.id) }
+        Button("Archive") { store.confirmArchive(session.id) }
+        Button("Delete", role: .destructive) { store.confirmDeleteSession(session.id) }
     }
 }
 
@@ -275,7 +275,7 @@ private struct ProjectHeader: View {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: project.path)])
             }
             Divider()
-            Button("Remove Project", role: .destructive) { store.removeProject(project) }
+            Button("Remove Project", role: .destructive) { store.confirmRemoveProject(project) }
         }
     }
 }
@@ -344,7 +344,7 @@ private struct SessionMenu: View {
             MenuRow(title: session.pinned ? "Unpin" : "Pin", icon: session.pinned ? "pin.slash" : "pin") {
                 store.togglePinned(session.id)
             }
-            MenuRow(title: "Restart", icon: "arrow.clockwise") { store.restart(session.id) }
+            MenuRow(title: "Restart", icon: "arrow.clockwise") { store.confirmRestart(session.id) }
             if store.terminals.isRunning(session.id) {
                 if session.status == .paused {
                     MenuRow(title: "Continue", icon: "play") { store.unpause(session.id) }
@@ -370,14 +370,14 @@ private struct SessionMenu: View {
                 }
             }
             MenuDivider()
-            MenuRow(title: "Archive", icon: "archivebox", shortcut: "⇧⌘⌫") { store.archive(session.id) }
+            MenuRow(title: "Archive", icon: "archivebox", shortcut: "⇧⌘⌫") { store.confirmArchive(session.id) }
             if session.worktreePath != nil {
                 MenuRow(title: "Remove Worktree…", icon: "arrow.triangle.branch", destructive: true) {
                     confirmRemoveWorktree()
                 }
             }
         }
-        MenuRow(title: "Delete", icon: "trash", destructive: true) { store.deleteSession(session.id) }
+        MenuRow(title: "Delete", icon: "trash", destructive: true) { store.confirmDeleteSession(session.id) }
     }
 }
 
@@ -444,7 +444,7 @@ private struct ProjectMenu: View {
         MenuRow(title: "Reveal in Finder", icon: "folder") {
             NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: project.path)])
         }
-        MenuRow(title: "Remove Project", icon: "minus.circle", destructive: true) { store.removeProject(project) }
+        MenuRow(title: "Remove Project", icon: "minus.circle", destructive: true) { store.confirmRemoveProject(project) }
     }
 }
 
