@@ -176,7 +176,7 @@ final class Daemon {
             // Reply first so the client creates its view, then the replay, then live output.
             reply.sessions = [s.info]
             client.send(Frame.json(reply))
-            client.send(Frame.data(.output, session: id, bytes: s.replay))
+            client.sendReplay(Frame.data(.output, session: id, bytes: s.replay), session: id)
             return
 
         case "detach":
@@ -294,6 +294,10 @@ final class Client {
     private var closed = false
     /// A client that stops reading gets dropped instead of growing memory without bound.
     static let maxBacklog = 8 * 1024 * 1024
+    /// Replays queued by attach, by session: where each ends in the stream and its size. The app attaches
+    /// every live session at once on connect, each with up to a ring's worth of replay, so they don't count
+    /// toward `maxBacklog`. One per session: memory stays within `maxBacklog` plus what the rings hold.
+    private var replays: [UUID: (end: Int, size: Int)] = [:]
 
     init(fd: Int32, queue: DispatchQueue) {
         self.fd = fd
@@ -327,7 +331,24 @@ final class Client {
     func send(_ bytes: [UInt8]) {
         guard !closed else { return }
         writer.send(bytes)
-        if writer.failed || writer.backlog > Self.maxBacklog { close() }
+        checkBacklog()
+    }
+
+    func sendReplay(_ bytes: [UInt8], session: UUID) {
+        guard !closed else { return }
+        writer.send(bytes)
+        replays[session] = (writer.written + writer.backlog, bytes.count)
+        checkBacklog()
+    }
+
+    private func checkBacklog() {
+        var credit = 0
+        if !replays.isEmpty {
+            let written = writer.written
+            replays = replays.filter { $0.value.end > written }
+            for r in replays.values { credit += min(r.size, r.end - written) }
+        }
+        if writer.failed || writer.backlog > Self.maxBacklog + credit { close() }
     }
 
     func close() {
