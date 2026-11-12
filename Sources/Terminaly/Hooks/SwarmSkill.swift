@@ -78,6 +78,9 @@ enum SwarmSkillInstaller {
     tly new --command claude --worktree swarm/api-client --title "API client" --prompt "…brief…"
     ```
 
+    `--command` is the agent to run: `claude` or `opencode`. Use the one you are unless the person
+    asks for another.
+
     It prints the worker's id. `--worktree BRANCH` creates the branch from your current commit and
     a worktree in a folder next to the repository; add `--json` to get the id and that folder (`cwd`).
     Launch all workers before waiting for any.

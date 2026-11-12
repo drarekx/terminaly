@@ -50,11 +50,16 @@ public struct WebConfig: Codable, Equatable, Sendable {
 
 /// Shared by the app and `tly web` so both resume an agent conversation the same way.
 public enum AgentResume {
-    /// `claude --resume <id>` for Claude sessions that reported their conversation id; nil otherwise.
+    /// `claude --resume <id>` (or `opencode --session <id>`) for sessions that reported their
+    /// conversation id; nil otherwise.
     public static func command(for command: String, agentSessionID: String?) -> String? {
-        guard let sid = agentSessionID, !sid.isEmpty,
-              command.split(separator: " ").first == "claude" else { return nil }
-        let safe = sid.filter { $0.isLetter || $0.isNumber || $0 == "-" }
-        return safe.isEmpty ? nil : "claude --resume \(safe)"
+        guard let sid = agentSessionID, !sid.isEmpty, let agent = command.split(separator: " ").first else { return nil }
+        let safe = sid.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+        guard !safe.isEmpty else { return nil }
+        switch agent {
+        case "claude": return "claude --resume \(safe)"
+        case "opencode": return "opencode --session \(safe)"
+        default: return nil
+        }
     }
 }

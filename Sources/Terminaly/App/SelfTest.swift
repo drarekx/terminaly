@@ -180,9 +180,13 @@ enum SelfTest {
         let skillOK = SwarmSkillInstaller.state(in: skills) == .current
         try? SwarmSkillInstaller.uninstall(in: skills)
         let skillGone = SwarmSkillInstaller.state(in: skills) == .missing
-        print("9 swarm: adopted=\(adopted) result=\(answer == "A:swarm") noNesting=\(nested.code != 0) askTimeout=\(asked.code == 3) limit=\(overLimit.code != 0) skill=\(skillOK && skillGone)")
+        try? OpenCodePluginInstaller.install(in: skills)
+        let pluginOK = OpenCodePluginInstaller.state(in: skills) == .current
+        try? OpenCodePluginInstaller.uninstall(in: skills)
+        let pluginGone = OpenCodePluginInstaller.state(in: skills) == .missing
+        print("9 swarm: adopted=\(adopted) result=\(answer == "A:swarm") noNesting=\(nested.code != 0) askTimeout=\(asked.code == 3) limit=\(overLimit.code != 0) skill=\(skillOK && skillGone) plugin=\(pluginOK && pluginGone)")
         guard adopted && answer == "A:swarm" && nested.code != 0 && asked.code == 3 && overLimit.code != 0
-                && skillOK && skillGone else { return finish(false, "swarm") }
+                && skillOK && skillGone && pluginOK && pluginGone else { return finish(false, "swarm") }
 
         finish(true, "")
     }

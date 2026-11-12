@@ -230,7 +230,7 @@
 "Swarm" = "Swarm";
 "Swarm skill" = "Skill de swarm";
 "Update available" = "Hay una versión nueva";
-"Teaches Claude Code to split a big task among worker sessions, each in its own git worktree, and to review and merge their work. Ask the agent for a swarm, or type /terminaly-swarm. Installed in ~/.claude/skills." = "Enseña a Claude Code a repartir una tarea grande entre sesiones worker, cada una en su propio worktree de git, y a revisar e integrar su trabajo. Pídele un swarm al agente o escribe /terminaly-swarm. Se instala en ~/.claude/skills.";
+"Teaches Claude Code and opencode to split a big task among worker sessions, each in its own git worktree, and to review and merge their work. Ask the agent for a swarm. Installed in ~/.claude/skills, which opencode reads too." = "Enseña a Claude Code y a opencode a repartir una tarea grande entre sesiones worker, cada una en su propio worktree de git, y a revisar e integrar su trabajo. Pídele un swarm al agente. Se instala en ~/.claude/skills, que opencode también lee.";
 "Install Skill" = "Instalar skill";
 "Update Skill" = "Actualizar skill";
 "Remove Skill" = "Quitar skill";
@@ -238,3 +238,8 @@
 "How many workers one session may have running at once. A worker cannot start workers of its own." = "Cuántos workers puede tener en marcha una sesión a la vez. Un worker no puede lanzar workers propios.";
 "Up to date" = "Al día";
 "Not set up" = "Sin instalar";
+"Status plugin" = "Plugin de estado";
+"Adds a plugin to ~/.config/opencode/plugins so opencode sessions report Working / Ready / Needs input, trigger notifications and can be resumed. It does nothing outside Terminaly. Needs opencode 2; restart running opencode sessions after installing." = "Añade un plugin a ~/.config/opencode/plugins para que las sesiones de opencode indiquen Trabajando / Listo / Pide respuesta, lancen notificaciones y se puedan reanudar. Fuera de Terminaly no hace nada. Necesita opencode 2; reinicia las sesiones de opencode abiertas tras instalarlo.";
+"Install Plugin" = "Instalar plugin";
+"Update Plugin" = "Actualizar plugin";
+"Remove Plugin" = "Quitar plugin";

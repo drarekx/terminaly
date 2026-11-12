@@ -51,6 +51,8 @@ private struct PresetsSettings: View {
 private struct IntegrationsSettings: View {
     @State private var installed = ClaudeHookInstaller.isInstalled
     @State private var error: String?
+    @State private var openCode = OpenCodePluginInstaller.state()
+    @State private var openCodeError: String?
     @State private var skill = SwarmSkillInstaller.state()
     @State private var skillError: String?
     @State private var maxWorkers = DaemonConfig.load().maxWorkers ?? DaemonConfig.defaultMaxWorkers
@@ -74,6 +76,28 @@ private struct IntegrationsSettings: View {
                 }
                 if let error { Text(error).foregroundStyle(.red).font(.caption) }
             }
+            Section("OpenCode") {
+                LabeledContent("Status plugin") {
+                    switch openCode {
+                    case .current: Text("Up to date").foregroundStyle(.green)
+                    case .outdated: Text("Update available").foregroundStyle(SessionStatus.needsInput.text)
+                    case .missing: Text("Not set up").foregroundStyle(.secondary)
+                    }
+                }
+                Text("Adds a plugin to ~/.config/opencode/plugins so opencode sessions report Working / Ready / Needs input, trigger notifications and can be resumed. It does nothing outside Terminaly. Needs opencode 2; restart running opencode sessions after installing.")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    if openCode != .current {
+                        Button(openCode == .outdated ? LocalizedStringKey("Update Plugin") : LocalizedStringKey("Install Plugin")) {
+                            runOpenCode { try OpenCodePluginInstaller.install() }
+                        }
+                    }
+                    if openCode != .missing {
+                        Button("Remove Plugin") { runOpenCode { try OpenCodePluginInstaller.uninstall() } }
+                    }
+                }
+                if let openCodeError { Text(openCodeError).foregroundStyle(.red).font(.caption) }
+            }
             Section("Swarm") {
                 LabeledContent("Swarm skill") {
                     switch skill {
@@ -82,7 +106,7 @@ private struct IntegrationsSettings: View {
                     case .missing: Text("Not set up").foregroundStyle(.secondary)
                     }
                 }
-                Text("Teaches Claude Code to split a big task among worker sessions, each in its own git worktree, and to review and merge their work. Ask the agent for a swarm, or type /terminaly-swarm. Installed in ~/.claude/skills.")
+                Text("Teaches Claude Code and opencode to split a big task among worker sessions, each in its own git worktree, and to review and merge their work. Ask the agent for a swarm. Installed in ~/.claude/skills, which opencode reads too.")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     if skill != .current {
@@ -115,6 +139,16 @@ private struct IntegrationsSettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func runOpenCode(_ op: () throws -> Void) {
+        do {
+            try op()
+            openCodeError = nil
+        } catch {
+            openCodeError = error.localizedDescription
+        }
+        openCode = OpenCodePluginInstaller.state()
     }
 
     private func runSkill(_ op: () throws -> Void) {

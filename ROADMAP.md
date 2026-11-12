@@ -60,6 +60,7 @@ Varios agentes trabajando a la vez bajo un agente «jefe». Terminaly no orquest
 | ✅ | Limpieza | «Quitar workers terminados»: borra los que están listos o han terminado y quita sus worktrees (sin forzar; la rama se conserva). | S |
 | ✅ | Skill para el jefe | Skill `terminaly-swarm` instalable desde Ajustes → Agentes: enseña al agente a dividir, lanzar en worktrees, esperar, revisar e integrar con `tly`. | S |
 | ✅ | Límite configurable | Máximo de workers por jefe en Ajustes → Agentes (1–16, por defecto 6); se aplica sin reiniciar el daemon. | S |
+| ✅ | opencode | Plugin instalable desde Ajustes → Agentes: estado, permisos, notificaciones, respuesta del turno y reanudar. Con él, opencode sirve de jefe o de worker en un swarm (`tly new --command opencode`). | M |
 
 Los permisos de un worker los aprueba la persona (barra y notificación de siempre), no el jefe. Fuera de alcance por ahora: mensajes entre workers, memoria compartida y merge automático de ramas.
 
