@@ -48,17 +48,7 @@ Pendiente: ver y controlar las sesiones de otro Mac de la misma red como si fuer
 
 **Más adelante**: acceso fuera de la red local (relay o Tailscale) y una app para iPhone que reciba los avisos y apruebe permisos.
 
-## v0.6 — Productividad
-
-| | Funcionalidad | Qué y por qué | Esfuerzo |
-|---|---|---|---|
-| | Icono en la barra de menús | Sesiones que piden respuesta y aprobación rápida sin abrir la ventana. | M |
-| | Enviar a varias sesiones | Escribir un prompt una vez y mandarlo a las sesiones seleccionadas. | S |
-| | Grupos y filtros | Filtrar la barra lateral por estado (pide respuesta, trabajando) y buscar sesiones por nombre. | S |
-| ✅ ★ | Pausar sesiones y ver el consumo | Pausar/continuar (SIGSTOP al árbol de procesos) y «Detener» para liberar memoria. En el pie de la barra lateral: sesiones abiertas, memoria y CPU; al pulsar, detalle por sesión con la app y el daemon. | M |
-| | Coste y tokens | Mostrar el coste y los tokens por sesión cuando el agente los reporte en sus hooks. | M |
-
-## v0.7 — Swarm ★
+## v0.6 — Swarm ★ ✅
 
 Varios agentes trabajando a la vez bajo un agente «jefe». Terminaly no orquesta: da las primitivas y el jefe (una sesión normal) decide. Sin LLM ni procesos nuevos en el daemon.
 
@@ -72,6 +62,16 @@ Varios agentes trabajando a la vez bajo un agente «jefe». Terminaly no orquest
 | ✅ | Límite configurable | Máximo de workers por jefe en Ajustes → Agentes (1–16, por defecto 6); se aplica sin reiniciar el daemon. | S |
 
 Los permisos de un worker los aprueba la persona (barra y notificación de siempre), no el jefe. Fuera de alcance por ahora: mensajes entre workers, memoria compartida y merge automático de ramas.
+
+## v0.7 — Productividad
+
+| | Funcionalidad | Qué y por qué | Esfuerzo |
+|---|---|---|---|
+| | Icono en la barra de menús | Sesiones que piden respuesta y aprobación rápida sin abrir la ventana. | M |
+| | Enviar a varias sesiones | Escribir un prompt una vez y mandarlo a las sesiones seleccionadas. | S |
+| | Grupos y filtros | Filtrar la barra lateral por estado (pide respuesta, trabajando) y buscar sesiones por nombre. | S |
+| ✅ ★ | Pausar sesiones y ver el consumo | Pausar/continuar (SIGSTOP al árbol de procesos) y «Detener» para liberar memoria. En el pie de la barra lateral: sesiones abiertas, memoria y CPU; al pulsar, detalle por sesión con la app y el daemon. | M |
+| | Coste y tokens | Mostrar el coste y los tokens por sesión cuando el agente los reporte en sus hooks. | M |
 
 ## Infraestructura (continua)
 

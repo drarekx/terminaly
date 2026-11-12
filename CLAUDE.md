@@ -25,7 +25,7 @@ Dependencias: SwiftTerm (terminal), Sparkle 2 (auto-update). Nada más.
 - Socket: `~/Library/Application Support/Terminaly/tly.sock`, permisos 0600, solo acepta peers con el mismo UID.
 
 ### Swarm (workers)
-Plan en `ROADMAP.md` (v0.7). Terminaly no orquesta: el «jefe» es una sesión normal que usa `tly`.
+Plan en `ROADMAP.md` (v0.6). Terminaly no orquesta: el «jefe» es una sesión normal que usa `tly`.
 - **Padre**: `tly new` lee `TERMINALY_SESSION_ID` y lo manda como `parent` (`--no-parent` lo evita). El daemon rechaza el `create` si el padre ya es worker (profundidad 1) o ha llegado al límite de workers vivos. Un padre que el daemon no conoce se ignora.
 - **Límite**: `DaemonConfig` (TerminalyKit) → `daemon.json` del `stateDir`, que edita Ajustes → Agentes (1–16, por defecto 6). El daemon lo lee en cada `create` con padre (archivo pequeño, solo ahí), así vale para un daemon ya en marcha y con la app cerrada. `TERMINALY_MAX_WORKERS` en el entorno del daemon gana al archivo.
 - **Prompt inicial** (`--prompt`): el daemon lo añade al comando como argumento entre comillas (`HostedSession.shellQuote`); `SessionInfo.command` sigue siendo el comando limpio (los presets se reconocen por él). La sesión nace en `working` y `SessionStart` no la pasa a `idle` hasta su primer `Stop`: así `tly wait` no vuelve antes de que responda.
