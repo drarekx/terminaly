@@ -183,7 +183,17 @@ final class Daemon {
             if let id = msg.id { client.attached.remove(id) }
 
         case "resize":
-            if let id = msg.id { sessions[id]?.resize(cols: msg.cols ?? 80, rows: msg.rows ?? 24) }
+            if let id = msg.id, let s = sessions[id] {
+                let (cols, rows) = (msg.cols ?? 80, msg.rows ?? 24)
+                s.resize(cols: cols, rows: rows)
+                // One size per session, shared by every screen showing it: the others must follow
+                // or they draw output laid out for another size.
+                var e = Message(type: "resized", id: id)
+                e.cols = cols
+                e.rows = rows
+                let frame = Frame.json(e)
+                for c in clients.values where c !== client && c.attached.contains(id) { c.send(frame) }
+            }
 
         case "send":
             guard let id = msg.id, let s = sessions[id] else { reply.error = "no such session"; break }

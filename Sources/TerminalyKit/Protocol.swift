@@ -82,7 +82,7 @@ public struct FrameDecoder {
 /// Flat control message. `type` selects the meaning; unused fields stay nil.
 ///
 /// Requests: hello, list, create, attach, detach, resize, send, kill, remove, logs, result, pause, continue, stats
-/// Replies echo `reqID`. Events (no reqID): sessions, status, exited, removed
+/// Replies echo `reqID`. Events (no reqID): sessions, status, exited, removed, resized (another client set the size)
 public struct Message: Codable {
     public var type: String
     public var reqID: Int?

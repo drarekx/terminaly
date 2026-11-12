@@ -30,6 +30,7 @@
       oneSession: "1 session", nSessions: "{n} sessions", runningPaused: "{r} running · {p} paused",
       noRunning: "No running sessions", host: "Session host (tly)",
       pauseIdle: "Pause idle sessions ({n})",
+      resizedBar: "Sized for another screen", fitHere: "Fit Here",
       resourcesNote: "Pausing stops all CPU use and keeps the session as it is; its memory stays allocated. To free memory, stop the session: Claude conversations can be resumed later.",
     },
     es: {
@@ -49,6 +50,7 @@
       oneSession: "1 sesión", nSessions: "{n} sesiones", runningPaused: "{r} en marcha · {p} en pausa",
       noRunning: "No hay sesiones en marcha", host: "Servicio de sesiones (tly)",
       pauseIdle: "Pausar sesiones inactivas ({n})",
+      resizedBar: "Ajustado a otra pantalla", fitHere: "Ajustar aquí",
       resourcesNote: "Pausar detiene todo el uso de CPU y deja la sesión tal cual; la memoria sigue ocupada. Para liberarla, detén la sesión: las conversaciones de Claude se pueden reanudar después.",
     },
   };
@@ -145,18 +147,62 @@
   term.loadAddon(fit);
   let termOpened = false;
 
-  term.onData((d) => sendInput(encoder.encode(d)));
+  // A session has one size, shared with the Mac app and other browsers. When another screen sets
+  // it, this one follows (drawing output laid out for another size garbles it) until it is used again.
+  let foreignSize = false;
+  let adopting = false;
+
+  function setForeign(on) {
+    foreignSize = on;
+    $("terminal-card").classList.toggle("foreign", on);
+    $("resized").hidden = !on;
+  }
+
+  function adoptSize(cols, rows) {
+    if (!termOpened || !cols || !rows) return;
+    const own = fit.proposeDimensions();
+    if (own && own.cols === cols && own.rows === rows) {
+      if (foreignSize) setForeign(false);
+    } else if (!foreignSize) {
+      setForeign(true);
+    }
+    if (cols === term.cols && rows === term.rows) return;
+    adopting = true;
+    term.resize(cols, rows);
+    adopting = false;
+  }
+
+  function reclaimSize() {
+    if (!foreignSize) return;
+    setForeign(false);
+    fit.fit();  // differs from the adopted size, so onResize tells the daemon
+  }
+
+  term.onData((d) => { reclaimSize(); sendInput(encoder.encode(d)); });
   term.onBinary((d) => sendInput(Uint8Array.from(d, (c) => c.charCodeAt(0) & 0xff)));
   term.onResize(({ cols, rows }) => {
-    if (attached) send({ type: "resize", id: attached, cols, rows });
+    if (attached && !adopting) send({ type: "resize", id: attached, cols, rows });
   });
 
   let fitTimer = null;
   function refit() {
     clearTimeout(fitTimer);
-    fitTimer = setTimeout(() => { if (termOpened && !$("terminal-card").hidden) fit.fit(); }, 60);
+    fitTimer = setTimeout(() => {
+      if (termOpened && !foreignSize && !$("terminal-card").hidden) fit.fit();
+    }, 60);
   }
   new ResizeObserver(refit).observe($("terminal-card"));
+  $("fit-here").onclick = () => { reclaimSize(); if (!matchMedia("(pointer: coarse)").matches) term.focus(); };
+
+  // iOS keeps the page height when the keyboard opens and covers the last lines, where agents
+  // put their prompt. Other browsers shrink the page themselves (interactive-widget).
+  if (window.visualViewport) {
+    visualViewport.addEventListener("resize", () => {
+      const covered = visualViewport.height < innerHeight - 1;
+      $("app").style.height = covered ? `${visualViewport.height}px` : "";
+      if (covered) scrollTo(0, 0);
+    });
+  }
 
   // Size for a session that starts before the terminal is on screen.
   function gridSize() {
@@ -281,6 +327,9 @@
         }
         break;
       }
+      case "resized":
+        if (msg.id === attached) adoptSize(msg.cols, msg.rows);
+        return;
       case "removed":
         live.delete(msg.id);
         refreshCatalogSoon();
@@ -352,6 +401,7 @@
       termOpened = true;
     }
     term.reset();
+    setForeign(false);
     fit.fit();
     send({ type: "attach", id }, (r) => {
       if (r.error || attached !== id) return;
