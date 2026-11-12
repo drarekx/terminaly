@@ -198,6 +198,12 @@ case "ask":
     // Its current turn would end first and be taken for the answer.
     guard s.status != "working" else { fail("session \(short(s.id)) is busy: `tly wait` for it first") }
     guard s.status != "paused" else { fail("session \(short(s.id)) is paused") }
+    // Text plus Enter would answer its permission dialog (Enter accepts it). Only then: an agent that
+    // finished and reminds the person it is waiting also reports needsInput, and that one can be asked.
+    if s.permission == true {
+        FileHandle.standardError.write(Data("tly: session \(short(s.id)) needs input: permission\n".utf8))
+        exit(2)
+    }
     var m = Message(type: "send", id: s.id)
     m.text = text
     m.enter = true

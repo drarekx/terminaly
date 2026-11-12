@@ -99,6 +99,8 @@ public final class SocketWriter {
     private var source: DispatchSourceWrite?
     public private(set) var failed = false
     public var backlog: Int { pending.count - offset }
+    /// Bytes written to the socket since creation; with `backlog`, locates queued data in the stream.
+    public private(set) var written = 0
 
     public init(fd: Int32, queue: DispatchQueue) {
         self.fd = fd
@@ -117,6 +119,7 @@ public final class SocketWriter {
             let n = pending.withUnsafeBytes { write(fd, $0.baseAddress! + offset, pending.count - offset) }
             if n > 0 {
                 offset += n
+                written += n
             } else if n < 0 && errno == EINTR {
                 continue
             } else if n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) {

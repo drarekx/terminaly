@@ -170,6 +170,13 @@ enum SelfTest {
         let answer = await tly(["result", created.out]).out
         let nested = await tly(["new", "--cwd", project.path], parent: worker)
         let asked = await tly(["ask", busy.id.uuidString, "x", "--timeout", "1"])
+        // `ask` must not type into a session showing a permission dialog: Enter would accept it.
+        let dialogCmd = "echo '{\"tool_name\":\"Bash\"}' | ( \(permHook) ); read -r answer; echo GOT-$answer-END"
+        guard let dialog = store.newSession(preset: Preset(label: "Dialog", command: dialogCmd), in: project) else { return finish(false, "create") }
+        _ = await waitUntil(5) { store.session(dialog.id)?.status == .needsInput }
+        let refused = await tly(["ask", dialog.id.uuidString, "yes", "--timeout", "2"])
+        try? await Task.sleep(for: .milliseconds(400))
+        let untouched = !(store.terminals.view(for: dialog.id)?.screenText().contains("GOT-") ?? true)
         // The limit set in Settings applies to a host that is already running.
         let previous = DaemonConfig.load()
         try? DaemonConfig(maxWorkers: 1).save()
@@ -191,9 +198,34 @@ enum SelfTest {
         let grid = store.canRestoreLayoutBeforeSwarm && store.layout.sessionIDs.contains { $0 == worker }
         store.restoreLayoutBeforeSwarm()
         let restored = grid && store.layout == before && !store.canRestoreLayoutBeforeSwarm
-        print("9 swarm: layoutBack=\(restored) adopted=\(adopted) result=\(answer == "A:swarm") noNesting=\(nested.code != 0) askTimeout=\(asked.code == 3) limit=\(overLimit.code != 0) skill=\(skillOK && skillGone) plugin=\(pluginOK && pluginGone)")
-        guard restored && adopted && answer == "A:swarm" && nested.code != 0 && asked.code == 3 && overLimit.code != 0
+        let askRefused = refused.code == 2 && untouched
+        print("9 swarm: layoutBack=\(restored) adopted=\(adopted) result=\(answer == "A:swarm") noNesting=\(nested.code != 0) askTimeout=\(asked.code == 3) askRefused=\(askRefused) limit=\(overLimit.code != 0) skill=\(skillOK && skillGone) plugin=\(pluginOK && pluginGone)")
+        guard restored && adopted && answer == "A:swarm" && nested.code != 0 && asked.code == 3 && askRefused && overLimit.code != 0
                 && skillOK && skillGone && pluginOK && pluginGone else { return finish(false, "swarm") }
+
+        // 10. Reconnecting with several sessions whose replay buffers are full: the app attaches them all at
+        // once and the replies (2 MB each) pile up past the host's backlog limit before it reads them.
+        // Replays must not get the app dropped, or every session shows as exited.
+        // The sessions fill their buffers while the app is away: fed live, 14 MB take the app minutes.
+        store.terminals.client.disconnect()
+        let flood = "yes 'Terminaly replay backlog line 0123456789 0123456789' | head -c 2300000; echo; echo FLOOD_DONE; sleep 120"
+        var floods: [String] = []
+        for _ in 0..<6 {
+            let f = await tly(["new", "--no-parent", "--cwd", project.path, "--command", flood])
+            guard f.code == 0 else { return finish(false, "create") }
+            floods.append(f.out)
+        }
+        let flooded = await tly(["wait"] + floods + ["--timeout", "30"]).code == 0
+        store.terminals.simulateRelaunch { _ in }
+        let ids = floods.compactMap(UUID.init(uuidString:))
+        let replayed = await waitUntil(20) {
+            ids.count == floods.count
+                && ids.allSatisfy { store.terminals.view(for: $0)?.screenText().contains("FLOOD_DONE") ?? false }
+        }
+        try? await Task.sleep(for: .milliseconds(500))
+        let kept = ids.allSatisfy { store.terminals.isRunning($0) && store.session($0)?.status != .exited }
+        print("10 replay backlog: flooded=\(flooded) replayed=\(replayed) kept=\(kept)")
+        guard flooded && replayed && kept else { return finish(false, "replay backlog") }
 
         finish(true, "")
     }

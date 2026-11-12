@@ -122,8 +122,9 @@ enum SwarmSkillInstaller {
     tly ask ID "The tests in api/ still fail with X. Fix them and report."
     ```
 
-    Sends the message, waits for the turn and prints the answer. Exit status 2 means it needs input,
-    3 means timeout (`--timeout S`). Only ask a worker that is `idle`.
+    Sends the message, waits for the turn and prints the answer. Exit status 2 means it needs input
+    (if it already did, nothing is sent: ask again once it is `idle`), 3 means timeout (`--timeout S`).
+    Only ask a worker that is `idle`.
 
     ## 5. Review and merge
 
