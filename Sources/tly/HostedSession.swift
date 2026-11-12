@@ -74,7 +74,7 @@ final class HostedSession {
         var args = ["-\(shellName)"]  // argv[0] with leading dash = login shell
         if !command.isEmpty {
             // Interactive so aliases resolve; fall back to a shell when the command exits.
-            let line = prompt.map { "\(command) \(Self.shellQuote($0))" } ?? command
+            let line = prompt.map { "\(command)\(Self.promptFlag(for: command)) \(Self.shellQuote($0))" } ?? command
             args += ["-i", "-c", "\(line); exec \(shell) -l"]
         }
         env["TERM"] = "xterm-256color"
@@ -108,6 +108,13 @@ final class HostedSession {
         exitSource = es
         es.resume()
         return true
+    }
+
+    /// Most agents take the first prompt as their argument; opencode takes a folder there.
+    static func promptFlag(for command: String) -> String {
+        let words = command.split(separator: " ")
+        let name = words.first.map { ($0 as NSString).lastPathComponent } ?? ""
+        return name == "opencode" && !words.contains("--prompt") ? " --prompt" : ""
     }
 
     static func shellQuote(_ s: String) -> String {
