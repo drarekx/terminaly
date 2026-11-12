@@ -76,6 +76,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .app {
   display: grid; grid-template-columns: 260px 1fr; grid-template-rows: minmax(0, 1fr);
   height: 100%; height: 100dvh;
+  position: relative;
 }
 .sidebar {
   background: var(--sidebar);
@@ -209,6 +210,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .icon-btn:hover { background: var(--hover); color: var(--text); }
 .back { display: none; }
 .empty { flex: 1; display: grid; place-items: center; color: var(--text-3); }
+/* Errors float over the terminal area: the session view hides the empty pane, so writing the
+   message there would leave the user with no clue what went wrong. */
+.toast {
+  position: absolute; z-index: 8; left: 272px; right: 12px; top: 60px;
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 10px 8px 10px 14px;
+  background: var(--elevated);
+  border: 1px solid rgba(255, 107, 107, 0.45);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  color: var(--danger); font-weight: 600;
+}
+.toast span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.toast-close { flex: none; width: 26px; height: 26px; color: var(--text-3); }
 .terminal-card {
   flex: 1; min-height: 0;
   background: var(--pane);
@@ -265,6 +280,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .app[data-view="list"] .main { display: none; }
   .sidebar { border-right: 0; padding-top: env(safe-area-inset-top); }
   .main { padding: env(safe-area-inset-top) 8px max(8px, env(safe-area-inset-bottom)); }
+  .toast { left: 8px; right: 8px; top: calc(env(safe-area-inset-top) + 56px); }
   .back { display: grid; }
   .row { min-height: 48px; }
 }

@@ -99,6 +99,13 @@
       <button data-key="enter" aria-label="Enter">⏎</button>
     </div>
   </main>
+  <!-- Out of .main: on phones the list view hides it, and the toast must show there too. -->
+  <div id="toast" class="toast" role="alert" hidden>
+    <span id="toast-text"></span>
+    <button id="toast-close" class="icon-btn toast-close" aria-label="Dismiss" data-i18n-label="dismiss">
+      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
 </div>
 
 <div id="menu" class="menu" role="menu" hidden></div>

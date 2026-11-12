@@ -32,6 +32,7 @@
       pauseIdle: "Pause idle sessions ({n})",
       resizedBar: "Sized for another screen", fitHere: "Fit Here",
       resourcesNote: "Pausing stops all CPU use and keeps the session as it is; its memory stays allocated. To free memory, stop the session: Claude conversations can be resumed later.",
+      dismiss: "Dismiss",
     },
     es: {
       loginHelp: "Pega el token de acceso de Terminaly → Ajustes → Web de tu Mac.",
@@ -52,6 +53,7 @@
       pauseIdle: "Pausar sesiones inactivas ({n})",
       resizedBar: "Ajustado a otra pantalla", fitHere: "Ajustar aquí",
       resourcesNote: "Pausar detiene todo el uso de CPU y deja la sesión tal cual; la memoria sigue ocupada. Para liberarla, detén la sesión: las conversaciones de Claude se pueden reanudar después.",
+      dismiss: "Descartar",
     },
   };
   const lang = (navigator.languages || [navigator.language]).some((l) => /^(es|ca|gl|eu)\b/i.test(l)) ? "es" : "en";
@@ -181,6 +183,9 @@
     fit.fit();  // differs from the adopted size, so onResize tells the daemon
   }
 
+  // On phones the on-screen keyboard would cover the agent's last lines, where its prompt is.
+  const focusTerminal = () => { if (!matchMedia("(pointer: coarse)").matches) term.focus(); };
+
   term.onData((d) => { reclaimSize(); sendInput(encoder.encode(d)); });
   term.onBinary((d) => sendInput(Uint8Array.from(d, (c) => c.charCodeAt(0) & 0xff)));
   term.onResize(({ cols, rows }) => {
@@ -198,7 +203,7 @@
   // Coming back to this window is using it, as activating the Mac app is.
   addEventListener("focus", reclaimSize);
   document.addEventListener("visibilitychange", () => { if (!document.hidden && document.hasFocus()) reclaimSize(); });
-  $("fit-here").onclick = () => { reclaimSize(); if (!matchMedia("(pointer: coarse)").matches) term.focus(); };
+  $("fit-here").onclick = () => { reclaimSize(); focusTerminal(); };
 
   // iOS keeps the page height when the keyboard opens and covers the last lines, where agents
   // put their prompt. Other browsers shrink the page themselves (interactive-widget).
@@ -383,6 +388,7 @@
     current = id;
     store.set("session", id);
     closeMenu();
+    hideError();
     $("app").dataset.view = id ? "terminal" : "list";
     if (id) open(id, fromStart);
     else if (attached) { send({ type: "detach", id: attached }); attached = null; }
@@ -415,7 +421,7 @@
       // Same nudge as the app: full-screen programs repaint after the replay.
       send({ type: "resize", id, cols: Math.max(term.cols - 1, 2), rows: term.rows });
       setTimeout(() => attached === id && send({ type: "resize", id, cols: term.cols, rows: term.rows }), 150);
-      if (!matchMedia("(pointer: coarse)").matches) term.focus();
+      focusTerminal();
     });
   }
 
@@ -813,11 +819,20 @@
   }
 
   let errorTimer = null;
+  /// The empty pane is hidden while a session is open, so errors float over the terminal area
+  /// instead: otherwise a failed start would leave no sign of it.
   function showError(text) {
-    $("empty-text").textContent = text;
+    $("toast-text").textContent = text;
+    $("toast").hidden = false;
     clearTimeout(errorTimer);
-    errorTimer = setTimeout(render, 4000);
+    errorTimer = setTimeout(hideError, 5000);
   }
+  function hideError() {
+    clearTimeout(errorTimer);
+    errorTimer = null;
+    $("toast").hidden = true;
+  }
+  $("toast-close").onclick = hideError;
 
   function showLogin(error) {
     $("app").hidden = true;
@@ -855,8 +870,9 @@
     render();
   };
   $("back").onclick = () => select(null);
-  $("allow").onclick = () => { sendInput(encoder.encode("\r")); term.focus(); };
-  $("deny").onclick = () => { sendInput(encoder.encode("\x1b")); term.focus(); };
+  // Focusing the terminal pops the on-screen keyboard over the agent's last lines on phones.
+  $("allow").onclick = () => { sendInput(encoder.encode("\r")); focusTerminal(); };
+  $("deny").onclick = () => { sendInput(encoder.encode("\x1b")); focusTerminal(); };
   $("resume").onclick = () => current && start(current, true);
   $("restart").onclick = () => current && start(current, false);
   $("pause").onclick = () => current && togglePause(current);
