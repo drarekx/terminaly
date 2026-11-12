@@ -128,7 +128,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .row-text { display: flex; flex-direction: column; min-width: 0; }
 .row-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-sub { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row-sub[data-status="needsInput"] { color: var(--needs); }
+.row-sub[data-status="needsInput"], .row-workers [data-status="needsInput"] { color: var(--needs); }
+.row-wrap.worker { margin-left: 18px; }
 .none { color: var(--text-3); padding: 12px 8px; }
 .sidebar { position: relative; }
 .sidebar-foot {

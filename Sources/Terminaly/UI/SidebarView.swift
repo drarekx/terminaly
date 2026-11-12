@@ -78,9 +78,9 @@ private struct WorkspacePage: View {
                 ForEach(projects) { project in
                     Section {
                         if !project.collapsed {
-                            ForEach(store.sessions(in: project)) { session in
-                                selectableRow(session)
-                                    .contextMenu { sessionMenu(session) }
+                            ForEach(store.sidebarSessions(in: project), id: \.session.id) { item in
+                                selectableRow(item.session, isWorker: item.isWorker)
+                                    .contextMenu { sessionMenu(item.session) }
                             }
                             if store.sessions(in: project).isEmpty {
                                 Text("No sessions")
@@ -146,8 +146,8 @@ private struct WorkspacePage: View {
         }
     }
 
-    private func selectableRow(_ session: Session) -> some View {
-        SidebarSessionRow(session: session, workspace: workspace)
+    private func selectableRow(_ session: Session, isWorker: Bool = false) -> some View {
+        SidebarSessionRow(session: session, workspace: workspace, isWorker: isWorker)
             .listRowInsets(EdgeInsets(top: 1, leading: 4, bottom: 1, trailing: 4))
             .listRowBackground(Color.clear)
     }
@@ -169,6 +169,12 @@ private struct WorkspacePage: View {
         Button("Split Right With This") {
             store.split(.horizontal)
             store.show(session.id)
+        }
+        if !store.workers(of: session.id).isEmpty {
+            Button("Show Swarm") { store.showSwarm(session.id) }
+            if !store.finishedWorkers(of: session.id).isEmpty {
+                Button("Remove Finished Workers…") { confirmRemoveFinishedWorkers(of: session, store: store) }
+            }
         }
         Divider()
         Button("Archive") { store.archive(session.id) }
@@ -279,13 +285,17 @@ private struct SidebarSessionRow: View {
     @Environment(AppStore.self) private var store
     let session: Session
     let workspace: Workspace
+    var isWorker = false
     @State private var hovering = false
     @State private var menuOpen = false
 
     private var selected: Bool { store.selectedSessionID == session.id }
 
     var body: some View {
-        SessionRow(session: session)
+        SessionRow(session: session, workers: isWorker ? [] : store.workers(of: session.id),
+                   workersCollapsed: session.workersCollapsed == true) {
+            store.toggleWorkersCollapsed(session.id)
+        }
             .padding(.horizontal, 8)
             .padding(.vertical, 2)
             .overlay(alignment: .trailing) {
@@ -316,6 +326,8 @@ private struct SidebarSessionRow: View {
             }
             .accessibilityAddTraits(.isButton)
             .accessibilityAddTraits(selected ? .isSelected : [])
+            // Workers sit under the session that started them.
+            .padding(.leading, isWorker ? 18 : 0)
     }
 }
 
@@ -347,6 +359,15 @@ private struct SessionMenu: View {
             MenuRow(title: "Open in Split", icon: "rectangle.split.2x1") {
                 store.split(.horizontal)
                 store.show(session.id)
+            }
+            if !store.workers(of: session.id).isEmpty {
+                MenuDivider()
+                MenuRow(title: "Show Swarm", icon: "square.grid.2x2") { store.showSwarm(session.id) }
+                if !store.finishedWorkers(of: session.id).isEmpty {
+                    MenuRow(title: "Remove Finished Workers…", icon: "checkmark.circle") {
+                        confirmRemoveFinishedWorkers(of: session, store: store)
+                    }
+                }
             }
             MenuDivider()
             MenuRow(title: "Archive", icon: "archivebox", shortcut: "⇧⌘⌫") { store.archive(session.id) }
@@ -383,6 +404,26 @@ extension SessionMenu {
     }
 }
 
+@MainActor
+private func confirmRemoveFinishedWorkers(of session: Session, store: AppStore) {
+    let count = store.finishedWorkers(of: session.id).count
+    let alert = NSAlert()
+    alert.messageText = String(localized: "Remove the finished workers of “\(session.title)”?")
+    alert.informativeText = String(localized: "Deletes \(count) sessions that are ready or have exited, and their worktrees. Branches are kept. A worktree with uncommitted changes stays, with its session.")
+    alert.addButton(withTitle: String(localized: "Remove"))
+    alert.addButton(withTitle: String(localized: "Cancel"))
+    guard alert.runModal() == .alertFirstButtonReturn else { return }
+    let id = session.id
+    Task { @MainActor in
+        let kept = await store.removeFinishedWorkers(of: id)
+        guard kept > 0 else { return }
+        let note = NSAlert()
+        note.messageText = String(localized: "\(kept) workers were kept")
+        note.informativeText = String(localized: "Their worktrees have uncommitted changes.")
+        note.runModal()
+    }
+}
+
 /// Project actions for the hover popover.
 private struct ProjectMenu: View {
     @Environment(AppStore.self) private var store
@@ -410,6 +451,10 @@ private struct ProjectMenu: View {
 /// Session row: status-tinted icon tile, title, status line with age, unread/attention dot.
 struct SessionRow: View {
     let session: Session
+    /// Sessions this one started: summarized under its status, with a toggle to hide their rows.
+    var workers: [Session] = []
+    var workersCollapsed = false
+    var toggleWorkers: () -> Void = {}
 
     private var dimmed: Bool { session.status == .exited }
 
@@ -441,6 +486,21 @@ struct SessionRow: View {
                         .foregroundStyle(session.status.text)
                         .lineLimit(1)
                 }
+                if !workers.isEmpty {
+                    Button(action: toggleWorkers) {
+                        HStack(spacing: 4) {
+                            Image(systemName: workersCollapsed ? "chevron.right" : "chevron.down")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(Theme.tertiaryText)
+                            workersSummary
+                                .font(Theme.Font.caption)
+                                .lineLimit(1)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(workersCollapsed ? LocalizedStringKey("Show workers") : LocalizedStringKey("Hide workers"))
+                }
             }
             Spacer(minLength: 4)
             if session.pinned {
@@ -457,6 +517,16 @@ struct SessionRow: View {
             }
         }
         .padding(.vertical, 3)
+    }
+
+    /// "Needs input 1 · Working 3": what needs you first, each count in its status color.
+    private var workersSummary: Text {
+        let order: [SessionStatus] = [.needsInput, .working, .starting, .idle, .paused, .exited]
+        let parts = order.compactMap { status -> Text? in
+            let n = workers.filter { $0.status == status }.count
+            return n == 0 ? nil : Text(verbatim: "\(status.label) \(n)").foregroundStyle(status.text)
+        }
+        return parts.dropFirst().reduce(parts[0]) { $0 + Text(verbatim: " · ").foregroundStyle(Theme.tertiaryText) + $1 }
     }
 
     private var statusLine: String {

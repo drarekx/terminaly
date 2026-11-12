@@ -92,6 +92,8 @@ struct Session: Identifiable, Codable, Hashable {
     var branch: String?
     /// The session that started this one (`tly new` run inside it): its workers are grouped under it.
     var parentID: UUID?
+    /// Its workers are hidden in the sidebar.
+    var workersCollapsed: Bool?
     /// Runtime-only state, not persisted.
     var status: SessionStatus = .starting
     var unread = false
@@ -103,7 +105,7 @@ struct Session: Identifiable, Codable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case id, projectID, title, command, symbol, createdAt, archived, pinned, userTitled, agentSessionID,
-             worktreePath, branch, parentID
+             worktreePath, branch, parentID, workersCollapsed
     }
 
     /// Command that continues the agent's last conversation, when the agent supports it.

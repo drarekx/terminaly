@@ -208,6 +208,7 @@ final class WebServer {
                     "title": s.title ?? "",
                     "command": s.command ?? "",
                     "createdAt": s.createdAt?.timeIntervalSinceReferenceDate ?? 0,
+                    "parentID": s.parentID?.uuidString ?? "",
                     "resumable": AgentResume.command(for: s.command ?? "", agentSessionID: s.agentSessionID) != nil,
                 ]
             },
@@ -549,6 +550,7 @@ struct AppStateFile: Decodable {
         var agentSessionID: String?
         var worktreePath: String?
         var createdAt: Date?
+        var parentID: UUID?
     }
 
     var workspaces: [Workspace]?

@@ -361,7 +361,7 @@ final class AppStore {
 
     /// Selects the next/previous visible session in sidebar order.
     func cycleSession(by offset: Int) {
-        let order = visibleProjects.flatMap { sessions(in: $0) }.map(\.id)
+        let order = visibleProjects.flatMap { sidebarSessions(in: $0) }.map(\.session.id)
         guard !order.isEmpty else { return }
         let i = selectedSessionID.flatMap { order.firstIndex(of: $0) } ?? -offset
         show(order[(i + offset + order.count) % order.count])
@@ -630,6 +630,78 @@ extension AppStore {
         for s in sessions where s.projectID == projectID { clearFromLayouts(s.id) }
         if let sid = selectedSessionID, session(sid)?.projectID == projectID { selectedSessionID = nil }
         scheduleSave()
+    }
+}
+
+// MARK: Swarm
+
+extension AppStore {
+    /// Sessions this one started (`tly new` run inside it) that are listed with it.
+    func workers(of id: UUID) -> [Session] {
+        guard let parent = session(id), parent.parentID == nil || session(parent.parentID)?.projectID != parent.projectID
+        else { return [] }
+        return sessions
+            .filter { $0.parentID == id && !$0.archived && $0.projectID == parent.projectID }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    /// Sidebar order: every session followed by its workers. A worker whose parent is gone,
+    /// archived or in another project is listed on its own.
+    func sidebarSessions(in project: Project) -> [(session: Session, isWorker: Bool)] {
+        let all = sessions(in: project)
+        let nested = Set(all.filter { !$0.archived }.flatMap { workers(of: $0.id) }.map(\.id))
+        return all.filter { !nested.contains($0.id) }.flatMap { s in
+            [(s, false)] + (s.workersCollapsed == true ? [] : workers(of: s.id).map { ($0, true) })
+        }
+    }
+
+    func toggleWorkersCollapsed(_ id: UUID) {
+        update(id) { $0.workersCollapsed = $0.workersCollapsed == true ? nil : true }
+        scheduleSave()
+    }
+
+    /// Replaces the layout with a grid of the session and its workers.
+    func showSwarm(_ id: UUID) {
+        let ids = [id] + workers(of: id).map(\.id)
+        guard ids.count > 1 else { return show(id) }
+        if let ws = workspace(of: id), ws.id != selectedWorkspaceID { selectWorkspace(ws.id) }
+        let columns = Int(Double(ids.count).squareRoot().rounded(.up))
+        let rows: [PaneNode] = stride(from: 0, to: ids.count, by: columns).map { start in
+            let leaves = ids[start..<min(start + columns, ids.count)].map { PaneNode.leaf(id: UUID(), sessionID: $0) }
+            return leaves.count == 1 ? leaves[0] : .split(id: UUID(), axis: .horizontal, children: leaves)
+        }
+        layout = rows.count == 1 ? rows[0] : .split(id: UUID(), axis: .vertical, children: rows)
+        zoomedLeafID = nil
+        focusedLeafID = layout.leaf(showing: id)
+        selectedSessionID = id
+        for sid in ids { update(sid) { $0.unread = false } }
+        terminals.focus(id)
+        scheduleSave()
+    }
+
+    /// Workers with nothing left to do: their turn is over, or their process is gone.
+    func finishedWorkers(of id: UUID) -> [Session] {
+        workers(of: id).filter { $0.status == .idle || $0.status == .exited || !terminals.isRunning($0.id) }
+    }
+
+    /// Deletes the finished workers and their worktrees (branches are kept). A worktree with
+    /// uncommitted changes is not removed, and its session stays as it is. Returns how many stayed.
+    func removeFinishedWorkers(of id: UUID) async -> Int {
+        var kept = 0
+        for w in finishedWorkers(of: id) {
+            // Shared worktrees (the parent's own, or another session's) are not this worker's to remove.
+            let shared = sessions.contains { $0.id != w.id && $0.worktreePath == w.worktreePath }
+            if let path = w.worktreePath, !shared, let p = project(w.projectID) {
+                do {
+                    try await Git.removeWorktree(repo: p.path, path: path)
+                } catch {
+                    kept += 1
+                    continue
+                }
+            }
+            deleteSession(w.id)
+        }
+        return kept
     }
 }
 

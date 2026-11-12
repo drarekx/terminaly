@@ -216,3 +216,13 @@
 "Performance" = "Rendimiento";
 "Draw terminals with the GPU" = "Dibujar los terminales con la GPU";
 "Uses much less CPU while agents are working. Turn it off if text looks wrong." = "Gasta mucha menos CPU mientras los agentes trabajan. Desactívalo si el texto se ve mal.";
+
+/* Swarm */
+"Show Swarm" = "Ver swarm";
+"Remove Finished Workers…" = "Quitar workers terminados…";
+"Show workers" = "Mostrar workers";
+"Hide workers" = "Ocultar workers";
+"Remove the finished workers of “%@”?" = "¿Quitar los workers terminados de «%@»?";
+"Deletes %lld sessions that are ready or have exited, and their worktrees. Branches are kept. A worktree with uncommitted changes stays, with its session." = "Elimina %lld sesiones que están listas o han terminado, y sus worktrees. Las ramas se conservan. Un worktree con cambios sin commit se queda, con su sesión.";
+"%lld workers were kept" = "Se han conservado %lld workers";
+"Their worktrees have uncommitted changes." = "Sus worktrees tienen cambios sin commit.";

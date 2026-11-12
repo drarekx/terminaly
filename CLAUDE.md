@@ -32,7 +32,9 @@ Plan en `ROADMAP.md` (v0.7). Terminaly no orquesta: el «jefe» es una sesión n
 - **Resultado** (`result`, petición aparte para no engordar `list`): `last_assistant_message` del hook `Stop`; si no viene, el último texto del asistente en `transcript_path`, leído fuera de la cola del daemon. Sin hooks: la salida del turno sin secuencias de escape (hasta 256 KB; trae el eco y el prompt de la shell).
 - **Enter aparte**: `send` con `enter` escribe el texto y, 100 ms después, el `\r`. Juntos, las TUI de agentes lo toman por un pegado y el Enter queda como salto de línea.
 - **Worktree desde la CLI** (`--worktree rama`): lo crea la CLI (git nunca en la cola del daemon) en el repo principal (`Git.mainRepository`, también si se lanza desde otro worktree) y manda `projectPath` y `branch`. `AppStore.adopt` los usa: sin ellos, una carpeta de worktree se adoptaba como proyecto nuevo.
-- App: `Session.parentID` (persistido). La barra lateral aún no anida los workers.
+- App: `Session.parentID` y `workersCollapsed` (persistidos). `AppStore.workers(of:)` solo cuenta los del mismo proyecto y no archivados; `sidebarSessions(in:)` da el orden de la barra lateral (cada sesión y debajo sus workers) y es también el orden de ⌘ siguiente/anterior. La fila del jefe (`SessionRow`) lleva el resumen por estado, que es el botón de plegar.
+- «Ver swarm» (`showSwarm`) sustituye el layout del workspace por una rejilla con el jefe y sus workers. «Quitar workers terminados» (`removeFinishedWorkers`): `idle`, `exited` o parados; quita primero el worktree sin forzar y, si falla, deja la sesión tal cual. Un worktree que comparte otra sesión no se toca.
+- Web: `parentID` en el catálogo y `parent` del daemon para las que la app aún no ha guardado; mismo anidado y resumen, sin plegar.
 - `tly wait` y `tly ask` van por eventos (`SyncConnection.nextFrame(before:)`), sin polling. Código de salida de `ask`: 0 respondió, 2 pide respuesta (permiso), 3 tiempo agotado.
 - Paso 9 del self-test.
 
@@ -93,6 +95,7 @@ TERMINALY_STATE_DIR=$(mktemp -d) .build/debug/Terminaly --selftest   # test end-
 TERMINALY_STATE_DIR=<dir con state.json> TERMINALY_SNAPSHOT_DIR=<out> build/Terminaly.app/Contents/MacOS/Terminaly
                                               # renderiza la ventana a PNG (un archivo por workspace, máx 3) + menus.png
                                               # extra: TERMINALY_SNAPSHOT_SHELL='cmd' abre una shell real; TERMINALY_SETTINGS_TAB=terminal|general captura Ajustes;
+                                              # TERMINALY_SNAPSHOT_SWARM=1 abre «Ver swarm» de la primera sesión con workers;
                                               # TERMINALY_CLICK_AT=x,y simula un clic (puntos desde arriba-izquierda) y guarda after-click.png
                                               # (y popover.png si abre un popover; sale con fondo transparente)
 ./scripts/release.sh 0.3.0 "notas"            # publica release + appcast (ver abajo)

@@ -65,9 +65,9 @@ Varios agentes trabajando a la vez bajo un agente «jefe». Terminaly no orquest
 | | Funcionalidad | Qué y por qué | Esfuerzo |
 |---|---|---|---|
 | ✅ | Primitivas en `tly` | `tly new --prompt --worktree --title` (la sesión lanzada desde dentro de otra queda como su worker), `tly ask` (envía, espera el turno y devuelve la respuesta), `tly result`, `tly wait` con varias sesiones y `--any`, `kill/rm --tree`. Turnos contados en el daemon: ya no hay carrera entre `send` y `wait`. Límites: un worker no lanza workers y máximo 6 por jefe. | M |
-| | Workers en la barra lateral | Anidados bajo su jefe y plegables, con resumen en la fila del jefe («3 trabajando · 1 pide respuesta»). También en la web. | M |
-| | Ver el swarm | Abrir los workers de un jefe en rejilla de paneles. | S |
-| | Limpieza | «Quitar workers terminados»: los borra y quita sus worktrees (sin forzar; la rama se conserva). | S |
+| ✅ | Workers en la barra lateral | Anidados bajo su jefe y plegables, con resumen en la fila del jefe («Pide respuesta 1 · Trabajando 3»). También en la web (sin plegar). | M |
+| ✅ | Ver el swarm | «Ver swarm» en el menú del jefe: abre al jefe y sus workers en rejilla de paneles. | S |
+| ✅ | Limpieza | «Quitar workers terminados»: borra los que están listos o han terminado y quita sus worktrees (sin forzar; la rama se conserva). | S |
 | | Skill para el jefe | Skill `terminaly-swarm` instalable desde Ajustes: enseña al agente a dividir, lanzar en worktrees, esperar, revisar e integrar con `tly`. | S |
 | | Límite configurable | Máximo de workers por jefe en Ajustes (hoy `TERMINALY_MAX_WORKERS` al arrancar el daemon). | S |
 

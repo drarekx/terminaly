@@ -301,13 +301,15 @@
     const info = live.get(id);
     const meta = saved(id);
     const running = !!info?.running;
-    let title = meta?.title;
+    let title = meta?.title || info?.title;
     if (!title) title = info?.command ? info.command.split(/\s+/)[0] : t("shell");
     return {
       id, title, running,
       status: running ? info.status : "stopped",
       permission: running && !!info.permission,
       projectID: meta?.projectID || null,
+      // The session that started this one; the daemon knows before the app has saved it.
+      parentID: meta?.parentID || info?.parent || null,
       cwd: info?.cwd || "",
       resumable: !!meta?.resumable,
       createdAt: meta?.createdAt ?? info?.createdAt ?? 0,
@@ -479,7 +481,14 @@
       if (folded) continue;
       // Running first, then stopped; each by creation.
       g.items.sort((a, b) => (b.running - a.running) || (a.createdAt - b.createdAt));
-      for (const v of g.items) list.append(row(v));
+      // Workers right under the session that started them, when it is in the same project.
+      const inGroup = new Set(g.items.map((v) => v.id));
+      const workersOf = (id) => g.items.filter((w) => w.parentID === id);
+      for (const v of g.items) {
+        if (v.parentID && inGroup.has(v.parentID) && v.parentID !== v.id) continue;
+        list.append(row(v, workersOf(v.id)));
+        for (const w of workersOf(v.id)) list.append(row(w, [], true));
+      }
     }
 
     const v = current && known(current) ? view(current) : null;
@@ -505,8 +514,8 @@
     renderUsage();
   }
 
-  function row(v) {
-    const wrap = el("div", "row-wrap");
+  function row(v, workers = [], isWorker = false) {
+    const wrap = el("div", isWorker ? "row-wrap worker" : "row-wrap");
     const r = el("button", "row");
     r.setAttribute("aria-current", v.id === current ? "true" : "false");
     r.dataset.stopped = String(!v.running);
@@ -522,6 +531,19 @@
     const sub = el("span", "row-sub", t(v.status));
     sub.dataset.status = v.status;
     text.append(sub);
+    if (workers.length) {
+      // "Needs input 1 · Working 3": what needs you first.
+      const line = el("span", "row-sub row-workers");
+      for (const status of ["needsInput", "working", "starting", "idle", "paused", "exited", "stopped"]) {
+        const n = workers.filter((w) => w.status === status).length;
+        if (!n) continue;
+        if (line.childNodes.length) line.append(" · ");
+        const part = el("span", null, `${t(status)} ${n}`);
+        part.dataset.status = status;
+        line.append(part);
+      }
+      text.append(line);
+    }
     r.append(dot, text);
 
     const more = el("button", "icon-btn more");

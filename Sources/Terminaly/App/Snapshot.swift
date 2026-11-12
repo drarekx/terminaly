@@ -24,6 +24,10 @@ enum Snapshot {
                 store.newSession(preset: Preset(label: "Shell", command: cmd), in: project)
                 try? await Task.sleep(for: .seconds(3))
             }
+            if env["TERMINALY_SNAPSHOT_SWARM"] != nil, let boss = store.sessions.first(where: { !store.workers(of: $0.id).isEmpty }) {
+                store.showSwarm(boss.id)
+                try? await Task.sleep(for: .seconds(1.5))
+            }
             for i in 0..<min(store.workspaces.count, 3) {
                 store.selectWorkspace(at: i)
                 try? await Task.sleep(for: .seconds(1.2))
