@@ -278,12 +278,14 @@ final class HostedSession {
     func hookEvent(_ event: String, payload: [String: Any]) {
         guard running, !paused else { return }
         hookDriven = true
+        // Says nothing about the turn, and after Stop it would send the session back to working for good.
+        if event == "SubagentStop" { return }
         hookSeq += 1
         turnOutput.removeAll()
         quietTimer?.cancel()
         if let sid = payload["session_id"] as? String, !sid.isEmpty { agentSessionID = sid }
         switch event {
-        case "UserPromptSubmit", "PreToolUse", "PostToolUse", "SubagentStop":
+        case "UserPromptSubmit", "PreToolUse", "PostToolUse":
             permissionPending = false
             setStatus("working")
         case "PermissionRequest":
