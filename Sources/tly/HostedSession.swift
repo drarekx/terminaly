@@ -214,14 +214,17 @@ final class HostedSession {
     func terminate() {
         guard running else { return }
         let pid = self.pid
+        // The whole tree, taken now: agents run in their own process group, which signalling the
+        // shell's group misses, and once the shell is gone they can no longer be found by parent.
+        let tree = ProcessStats.tree(of: pid, parents: ProcessStats.parentMap())
         kill(-pid, SIGHUP)
-        kill(pid, SIGHUP)
+        for p in tree { kill(p, SIGHUP) }
         // A stopped process only acts on SIGHUP once continued.
         if paused { signalTree(SIGCONT) }
-        queue.asyncAfter(deadline: .now() + 2) { [weak self] in
-            guard let self, self.running, self.pid == pid else { return }
-            kill(-pid, SIGKILL)
-            kill(pid, SIGKILL)
+        // Not tied to the session: the shell usually dies at once and leaves behind whatever ignores SIGHUP.
+        queue.asyncAfter(deadline: .now() + 2) {
+            // Only what is still in this terminal session: a pid may have been reused meanwhile.
+            for p in tree where getsid(p) == pid { kill(p, SIGKILL) }
         }
     }
 

@@ -7,6 +7,9 @@ import TerminalyKit
 final class Daemon {
     let queue = DispatchQueue(label: "tly.daemon")
     private var sessions: [UUID: HostedSession] = [:]
+    /// Removed sessions whose processes have not exited yet. They must stay alive until then: with the
+    /// session gone nobody reads or closes its PTY, and its processes hang forever while exiting.
+    private var dying: [UUID: HostedSession] = [:]
     private var clients: [ObjectIdentifier: Client] = [:]
     private var listenSource: DispatchSourceRead?
     private let hooks = HookServer()
@@ -73,7 +76,7 @@ final class Daemon {
     }
 
     private func checkIdle() {
-        let busy = !clients.isEmpty || sessions.values.contains { $0.running }
+        let busy = !clients.isEmpty || !dying.isEmpty || sessions.values.contains { $0.running }
         if busy {
             idleSince = Date()
         } else if Date().timeIntervalSince(idleSince) > Self.idleExitSeconds {
@@ -216,6 +219,10 @@ final class Daemon {
             s.onOutput = nil
             s.onStatus = nil
             s.onExit = nil
+            if s.running {
+                dying[id] = s
+                s.onExit = { [weak self] s in self?.dying[s.id] = nil }
+            }
             s.terminate()
             broadcast(Message(type: "removed", id: id))
 
