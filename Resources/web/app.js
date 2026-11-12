@@ -170,6 +170,9 @@
     adopting = true;
     term.resize(cols, rows);
     adopting = false;
+    // What matters is at the end: agents keep their prompt on the last lines.
+    const card = $("terminal-card");
+    requestAnimationFrame(() => { card.scrollTop = card.scrollHeight; });
   }
 
   function reclaimSize() {
@@ -192,6 +195,9 @@
     }, 60);
   }
   new ResizeObserver(refit).observe($("terminal-card"));
+  // Coming back to this window is using it, as activating the Mac app is.
+  addEventListener("focus", reclaimSize);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && document.hasFocus()) reclaimSize(); });
   $("fit-here").onclick = () => { reclaimSize(); if (!matchMedia("(pointer: coarse)").matches) term.focus(); };
 
   // iOS keeps the page height when the keyboard opens and covers the last lines, where agents
