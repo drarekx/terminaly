@@ -120,7 +120,7 @@ enum TerminalPrefs {
     static var gpuRendering: Bool {
         if let forced = ProcessInfo.processInfo.environment["TERMINALY_GPU"] { return forced == "1" }
         if ProcessInfo.processInfo.environment["TERMINALY_SNAPSHOT_DIR"] != nil { return false }
-        return UserDefaults.standard.bool(forKey: "terminalGPU")
+        return UserDefaults.standard.object(forKey: "terminalGPU") as? Bool ?? true
     }
     static var fontFamily: String {
         UserDefaults.standard.string(forKey: "terminalFontFamily") ?? ""

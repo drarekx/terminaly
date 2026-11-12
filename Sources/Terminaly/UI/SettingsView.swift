@@ -94,7 +94,7 @@ private struct TerminalSettings: View {
     @AppStorage("terminalFontFamily") private var fontFamily = ""
     @AppStorage("terminalFontSize") private var fontSize = 13.0
     @AppStorage("optionAsMeta") private var optionAsMeta = true
-    @AppStorage("terminalGPU") private var gpu = false
+    @AppStorage("terminalGPU") private var gpu = true
     @AppStorage("notificationsEnabled") private var notifications = true
     @State private var families: [String] = []
 
