@@ -69,6 +69,13 @@ struct RootView: View {
             .padding(.horizontal, 6)
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            if store.canRestoreLayoutBeforeSwarm {
+                Button { store.restoreLayoutBeforeSwarm() } label: {
+                    Label("Back to Layout", systemImage: "arrow.uturn.backward").labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(SecondaryButtonStyle(compact: true))
+                .help("Go back to the panes you had before Show Swarm")
+            }
             HStack(spacing: 2) {
                 Button {
                     if let p = store.presets.first { store.newSession(preset: p) }
