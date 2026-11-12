@@ -33,6 +33,10 @@ struct CommandPaletteView: View {
                                 symbol: "plus") { store.newSession(preset: preset, in: p) })
             }
         }
+        if store.canRestoreLayoutBeforeSwarm {
+            all.append(Item(id: "swarm-back", title: String(localized: "Back to Layout"), subtitle: String(localized: "Pane"),
+                            symbol: "arrow.uturn.backward") { store.restoreLayoutBeforeSwarm() })
+        }
         all.append(Item(id: "split-h", title: String(localized: "Split Right"), subtitle: String(localized: "Pane"), symbol: "rectangle.split.2x1") { store.split(.horizontal) })
         all.append(Item(id: "split-v", title: String(localized: "Split Down"), subtitle: String(localized: "Pane"), symbol: "rectangle.split.1x2") { store.split(.vertical) })
         all.append(Item(id: "new-ws", title: String(localized: "New Workspace"), subtitle: String(localized: "Workspace"), symbol: "plus.rectangle.on.rectangle") { store.addWorkspace() })

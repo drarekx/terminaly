@@ -26,6 +26,8 @@ final class AppStore {
     var gitProjects: Set<UUID> = []
     /// Project whose "New Session in Worktree" sheet is open.
     var worktreeRequestProjectID: UUID?
+    /// Layout each workspace had before Show Swarm replaced it; runtime only.
+    var layoutsBeforeSwarm: [UUID: PaneNode] = [:]
 
     @ObservationIgnored let terminals = TerminalRegistry()
     @ObservationIgnored let resources = ResourceMonitor()
@@ -665,6 +667,8 @@ extension AppStore {
         let ids = [id] + workers(of: id).map(\.id)
         guard ids.count > 1 else { return show(id) }
         if let ws = workspace(of: id), ws.id != selectedWorkspaceID { selectWorkspace(ws.id) }
+        // A second Show Swarm must not replace the user's layout with the previous grid.
+        if let wid = selectedWorkspaceID, layoutsBeforeSwarm[wid] == nil { layoutsBeforeSwarm[wid] = layout }
         let columns = Int(Double(ids.count).squareRoot().rounded(.up))
         let rows: [PaneNode] = stride(from: 0, to: ids.count, by: columns).map { start in
             let leaves = ids[start..<min(start + columns, ids.count)].map { PaneNode.leaf(id: UUID(), sessionID: $0) }
@@ -676,6 +680,28 @@ extension AppStore {
         selectedSessionID = id
         for sid in ids { update(sid) { $0.unread = false } }
         terminals.focus(id)
+        scheduleSave()
+    }
+
+    /// The selected workspace has a layout from before Show Swarm to go back to.
+    var canRestoreLayoutBeforeSwarm: Bool {
+        selectedWorkspaceID.map { layoutsBeforeSwarm[$0] != nil } ?? false
+    }
+
+    /// Puts back the layout the selected workspace had before Show Swarm, without the sessions
+    /// that were deleted, archived or moved to another workspace since.
+    func restoreLayoutBeforeSwarm() {
+        guard let wid = selectedWorkspaceID, var kept = layoutsBeforeSwarm.removeValue(forKey: wid) else { return }
+        for sid in kept.sessionIDs {
+            if let s = session(sid), !s.archived, workspace(of: sid)?.id == wid { continue }
+            kept = kept.clearing(sid)
+        }
+        layout = kept
+        zoomedLeafID = nil
+        focusedLeafID = selectedSessionID.flatMap { layout.leaf(showing: $0) }
+            ?? layout.leafIDs.first { layout.sessionID(inLeaf: $0) != nil } ?? layout.leafIDs.first
+        selectedSessionID = focusedLeafID.flatMap { layout.sessionID(inLeaf: $0) }
+        if let sid = selectedSessionID { terminals.focus(sid) }
         scheduleSave()
     }
 

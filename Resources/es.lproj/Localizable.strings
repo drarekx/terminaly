@@ -226,6 +226,8 @@
 "Deletes %lld sessions that are ready or have exited, and their worktrees. Branches are kept. A worktree with uncommitted changes stays, with its session." = "Elimina %lld sesiones que están listas o han terminado, y sus worktrees. Las ramas se conservan. Un worktree con cambios sin commit se queda, con su sesión.";
 "%lld workers were kept" = "Se han conservado %lld workers";
 "Their worktrees have uncommitted changes." = "Sus worktrees tienen cambios sin commit.";
+"Back to Layout" = "Volver a los paneles";
+"Go back to the panes you had before Show Swarm" = "Vuelve a los paneles que tenías antes de «Ver swarm»";
 
 "Swarm" = "Swarm";
 "Swarm skill" = "Skill de swarm";

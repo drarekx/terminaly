@@ -184,8 +184,15 @@ enum SelfTest {
         let pluginOK = OpenCodePluginInstaller.state(in: skills) == .current
         try? OpenCodePluginInstaller.uninstall(in: skills)
         let pluginGone = OpenCodePluginInstaller.state(in: skills) == .missing
-        print("9 swarm: adopted=\(adopted) result=\(answer == "A:swarm") noNesting=\(nested.code != 0) askTimeout=\(asked.code == 3) limit=\(overLimit.code != 0) skill=\(skillOK && skillGone) plugin=\(pluginOK && pluginGone)")
-        guard adopted && answer == "A:swarm" && nested.code != 0 && asked.code == 3 && overLimit.code != 0
+        // Show Swarm keeps the previous layout (also when run twice) and Back to Layout restores it.
+        let before = store.layout
+        store.showSwarm(busy.id)
+        store.showSwarm(busy.id)
+        let grid = store.canRestoreLayoutBeforeSwarm && store.layout.sessionIDs.contains { $0 == worker }
+        store.restoreLayoutBeforeSwarm()
+        let restored = grid && store.layout == before && !store.canRestoreLayoutBeforeSwarm
+        print("9 swarm: layoutBack=\(restored) adopted=\(adopted) result=\(answer == "A:swarm") noNesting=\(nested.code != 0) askTimeout=\(asked.code == 3) limit=\(overLimit.code != 0) skill=\(skillOK && skillGone) plugin=\(pluginOK && pluginGone)")
+        guard restored && adopted && answer == "A:swarm" && nested.code != 0 && asked.code == 3 && overLimit.code != 0
                 && skillOK && skillGone && pluginOK && pluginGone else { return finish(false, "swarm") }
 
         finish(true, "")
