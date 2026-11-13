@@ -120,6 +120,7 @@
   const collapsed = new Set((() => { try { return JSON.parse(store.get("collapsed") || "[]"); } catch { return []; } })());
   // Restart of a running session: stop it, then start it once the daemon reports the exit.
   const restartAfterExit = new Map(); // id → resume?
+  const startedWithParent = new Set();
 
   // Tokens can arrive in the link (#token=…) so the Mac can show one URL to open; never keep it in the address bar.
   const hashToken = new URLSearchParams(location.hash.slice(1)).get("token");
@@ -291,6 +292,11 @@
         render();
         break;
       case "started":
+        // Workers brought back by their parent start in the background: no error toast, no selection.
+        if (startedWithParent.delete(msg.id)) {
+          refreshCatalogSoon();
+          break;
+        }
         if (msg.error || !msg.id) {
           showError(`${t("startFailed")}: ${msg.error || "?"}`);
           break;
@@ -425,8 +431,24 @@
     });
   }
 
+  /// The sessions started by this one, in its project: they stop and start with it, like in the app.
+  function workerIDs(id) {
+    const projectID = view(id).projectID;
+    const ids = new Set([...live.keys(), ...catalog.sessions.map((s) => s.id)]);
+    return [...ids].filter((w) => {
+      const v = view(w);
+      return w !== id && v.parentID === id && v.projectID === projectID;
+    });
+  }
+
   function start(id, resume) {
     command({ type: "start", id, resume, ...gridSize() });
+    // A worker with no saved conversation stays stopped: its command alone would not repeat its brief.
+    for (const w of workerIDs(id)) {
+      if (isRunning(w) || !view(w).resumable) continue;
+      startedWithParent.add(w);
+      command({ type: "start", id: w, resume: true, ...gridSize() });
+    }
   }
 
   function newSession(projectID, presetID) {
@@ -436,8 +458,10 @@
 
   /// Ends the process but keeps the session, like "Stop" in the app: it can be started or resumed later.
   function stop(id) {
-    restartAfterExit.delete(id);
-    if (isRunning(id)) send({ type: "kill", id });
+    for (const sid of [id, ...workerIDs(id)]) {
+      restartAfterExit.delete(sid);
+      if (isRunning(sid)) send({ type: "kill", id: sid });
+    }
   }
 
   function restart(id, resume) {

@@ -203,6 +203,52 @@ enum SelfTest {
         guard restored && adopted && answer == "A:swarm" && nested.code != 0 && asked.code == 3 && askRefused && overLimit.code != 0
                 && skillOK && skillGone && pluginOK && pluginGone else { return finish(false, "swarm") }
 
+        // 9b. A session's workers follow it: they stop and are archived with it, and deleting it deletes
+        // them and their worktrees, except a worktree with uncommitted changes, which stays with its session.
+        // The CLI reports the repository as git names it (`/private/var/…`): the project must use the same path.
+        let teamDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tly-team-\(Int.random(in: 1000...9999))")
+        try? FileManager.default.createDirectory(at: teamDir, withIntermediateDirectories: true)
+        let team = URL(fileURLWithPath: realpath(teamDir.path, nil).map { String(cString: $0) } ?? teamDir.path)
+        try? "hi\n".write(to: team.appendingPathComponent("README"), atomically: true, encoding: .utf8)
+        _ = try? await Git.run(["init", "-q", "-b", "main"], in: team.path)
+        _ = try? await Git.run(["add", "."], in: team.path)
+        _ = try? await Git.run(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init"], in: team.path)
+        let teamProject = store.addProject(at: team)
+        guard let boss = store.newSession(preset: Preset(label: "Boss", command: "sleep 300"), in: teamProject) else { return finish(false, "create") }
+        _ = await waitUntil(5) { store.terminals.isRunning(boss.id) }
+        var members: [UUID] = []
+        for branch in ["clean", "dirty"] {
+            let w = await tly(["new", "--cwd", team.path, "--command", "sleep 300", "--worktree", branch], parent: boss.id)
+            if let id = UUID(uuidString: w.out) { members.append(id) }
+        }
+        let adoptedAll = await waitUntil(5) {
+            members.allSatisfy { store.session($0)?.parentID == boss.id && store.session($0)?.worktreePath != nil }
+        }
+        guard members.count == 2 && adoptedAll else { return finish(false, "workers follow: adopt") }
+        let all = [boss.id] + members
+        store.stop(boss.id)
+        let stopped = all.allSatisfy { !store.terminals.isRunning($0) && store.session($0)?.status == .exited }
+        // With no saved conversation there is nothing to resume: only the parent comes back.
+        store.restart(boss.id)
+        let bossBack = await waitUntil(5) { store.terminals.isRunning(boss.id) }
+        let started = bossBack && members.allSatisfy { !store.terminals.isRunning($0) }
+        store.archive(boss.id)
+        let archived = all.allSatisfy { store.session($0)?.archived == true }
+        store.show(boss.id)
+        let unarchived = all.allSatisfy { store.session($0)?.archived == false }
+        let dirtyPath = store.session(members[1])?.worktreePath ?? ""
+        let cleanPath = store.session(members[0])?.worktreePath ?? ""
+        try? "wip\n".write(toFile: dirtyPath + "/wip.txt", atomically: true, encoding: .utf8)
+        let keptWorkers = await store.deleteWithWorkers(boss.id)
+        let deleted = keptWorkers == 1 && store.session(boss.id) == nil && store.session(members[0]) == nil
+            && !FileManager.default.fileExists(atPath: cleanPath)
+        let survivor = store.session(members[1]).map { $0.parentID == nil } == true
+            && FileManager.default.fileExists(atPath: dirtyPath + "/wip.txt")
+        try? FileManager.default.removeItem(at: team)
+        try? FileManager.default.removeItem(at: team.deletingLastPathComponent().appendingPathComponent(team.lastPathComponent + ".worktrees"))
+        print("9b workers follow: stopped=\(stopped) started=\(started) archived=\(archived) unarchived=\(unarchived) deleted=\(deleted) survivor=\(survivor)")
+        guard stopped && started && archived && unarchived && deleted && survivor else { return finish(false, "workers follow") }
+
         // 10. Reconnecting with several sessions whose replay buffers are full: the app attaches them all at
         // once and the replies (2 MB each) pile up past the host's backlog limit before it reads them.
         // Replays must not get the app dropped, or every session shows as exited.

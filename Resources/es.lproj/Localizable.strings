@@ -252,3 +252,5 @@
 "The agent is working or waiting for your answer. Archiving stops it." = "El agente está trabajando o esperando tu respuesta. Al archivar se detiene.";
 "Restart “%@”?" = "¿Reiniciar «%@»?";
 "The agent is working or waiting for your answer. Restarting stops it and starts a new process." = "El agente está trabajando o esperando tu respuesta. Al reiniciar se detiene y arranca un proceso nuevo.";
+"Its %lld workers and their worktrees are deleted too. Branches are kept. A worktree with uncommitted changes stays, with its session. Running sessions that will be stopped: %lld." = "También se eliminan sus %lld workers y sus worktrees. Las ramas se conservan. Un worktree con cambios sin commit se queda, con su sesión. Sesiones en marcha que se detendrán: %lld.";
+"This session or its workers are working or waiting for your answer. Archiving stops them all." = "Esta sesión o sus workers están trabajando o esperando tu respuesta. Al archivar se detienen todos.";

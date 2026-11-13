@@ -270,7 +270,13 @@ final class AppStore {
     /// Shows a session: focuses its pane if visible, otherwise puts it in the focused pane.
     func show(_ id: UUID) {
         guard let s = session(id) else { return }
-        if s.archived { update(id) { $0.archived = false } }
+        if s.archived {
+            // Its workers were archived with it.
+            for w in sessions where w.parentID == id && w.projectID == s.projectID && w.archived {
+                update(w.id) { $0.archived = false }
+            }
+            update(id) { $0.archived = false }
+        }
         if let ws = workspace(of: id), ws.id != selectedWorkspaceID { selectWorkspace(ws.id) }
         if let leaf = layout.leaf(showing: id) {
             focusedLeafID = leaf
@@ -286,20 +292,33 @@ final class AppStore {
     }
 
     func restart(_ id: UUID) {
-        guard let s = session(id), let cwd = workingDirectory(for: s) else { return }
-        terminals.stop(id)
-        update(id) { $0.status = .starting; $0.exitCode = nil; $0.permissionPending = false }
-        terminals.start(s, cwd: cwd)
+        guard launch(id) else { return }
+        resumeWorkers(of: id)
         show(id)
     }
 
     /// Restarts the session continuing the agent's previous conversation (`claude --resume <id>`).
     func resume(_ id: UUID) {
-        guard let s = session(id), let cwd = workingDirectory(for: s), let command = s.resumeCommand else { return }
+        guard let command = session(id)?.resumeCommand, launch(id, command: command) else { return }
+        resumeWorkers(of: id)
+        show(id)
+    }
+
+    private func launch(_ id: UUID, command: String? = nil) -> Bool {
+        guard let s = session(id), let cwd = workingDirectory(for: s) else { return false }
         terminals.stop(id)
         update(id) { $0.status = .starting; $0.exitCode = nil; $0.permissionPending = false }
         terminals.start(s, cwd: cwd, command: command)
-        show(id)
+        return true
+    }
+
+    /// Starting a session brings back its stopped workers, each continuing its own conversation.
+    /// A worker with no saved conversation stays stopped: its command alone would not repeat its brief.
+    private func resumeWorkers(of id: UUID) {
+        for w in workers(of: id) where !terminals.isRunning(w.id) {
+            guard let command = w.resumeCommand else { continue }
+            _ = launch(w.id, command: command)
+        }
     }
 
     /// Stops the session's processes without killing them: no CPU until `unpause`.
@@ -314,9 +333,12 @@ final class AppStore {
     }
 
     /// Ends the process (frees its memory) but keeps the session, so it can be restarted or resumed.
+    /// Its workers stop with it.
     func stop(_ id: UUID) {
-        terminals.stop(id)
-        update(id) { $0.status = .exited; $0.permissionPending = false }
+        for sid in [id] + workers(of: id).map(\.id) {
+            terminals.stop(sid)
+            update(sid) { $0.status = .exited; $0.permissionPending = false }
+        }
     }
 
     /// Answers the agent's permission dialog: Enter accepts the highlighted "Yes", Esc declines.
@@ -333,11 +355,14 @@ final class AppStore {
         Notifier.updateBadge(count: sessions.filter { $0.status == .needsInput }.count)
     }
 
+    /// Its workers are archived with it.
     func archive(_ id: UUID) {
-        terminals.stop(id)
-        clearFromLayouts(id)
-        update(id) { $0.archived = true; $0.status = .exited }
-        if selectedSessionID == id { selectedSessionID = nil }
+        for sid in [id] + workers(of: id).map(\.id) {
+            terminals.stop(sid)
+            clearFromLayouts(sid)
+            update(sid) { $0.archived = true; $0.status = .exited }
+            if selectedSessionID == sid { selectedSessionID = nil }
+        }
         scheduleSave()
     }
 
@@ -541,16 +566,29 @@ extension AppStore {
     /// Deletes the session, asking first if its process is still running.
     func confirmDeleteSession(_ id: UUID) {
         guard let s = session(id) else { return }
-        let running = terminals.isRunning(id) ? 1 : 0
-        if running > 0 {
+        let team = workers(of: id)
+        let running = ([s] + team).filter { terminals.isRunning($0.id) }.count
+        if running > 0 || !team.isEmpty {
             let alert = NSAlert()
             alert.messageText = String(localized: "Delete “\(s.title)”?")
-            alert.informativeText = String(localized: "Running sessions that will be stopped: \(running).")
+            if team.isEmpty {
+                alert.informativeText = String(localized: "Running sessions that will be stopped: \(running).")
+            } else {
+                alert.informativeText = String(localized: "Its \(team.count) workers and their worktrees are deleted too. Branches are kept. A worktree with uncommitted changes stays, with its session. Running sessions that will be stopped: \(running).")
+            }
             alert.addButton(withTitle: String(localized: "Delete"))
             alert.addButton(withTitle: String(localized: "Cancel"))
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
-        deleteSession(id)
+        guard !team.isEmpty else { return deleteSession(id) }
+        Task { @MainActor in
+            let kept = await deleteWithWorkers(id)
+            guard kept > 0 else { return }
+            let note = NSAlert()
+            note.messageText = String(localized: "\(kept) workers were kept")
+            note.informativeText = String(localized: "Their worktrees have uncommitted changes.")
+            note.runModal()
+        }
     }
 
     /// Removes the project and its sessions, asking first if any of them is still running.
@@ -570,10 +608,15 @@ extension AppStore {
     /// Archives the session, asking first if the agent is in the middle of a turn or waiting for an answer.
     func confirmArchive(_ id: UUID) {
         guard let s = session(id) else { return }
-        if isBusy(s) {
+        let team = workers(of: id)
+        if isBusy(s) || team.contains(where: isBusy) {
             let alert = NSAlert()
             alert.messageText = String(localized: "Archive “\(s.title)”?")
-            alert.informativeText = String(localized: "The agent is working or waiting for your answer. Archiving stops it.")
+            if team.isEmpty {
+                alert.informativeText = String(localized: "The agent is working or waiting for your answer. Archiving stops it.")
+            } else {
+                alert.informativeText = String(localized: "This session or its workers are working or waiting for your answer. Archiving stops them all.")
+            }
             alert.addButton(withTitle: String(localized: "Archive"))
             alert.addButton(withTitle: String(localized: "Cancel"))
             guard alert.runModal() == .alertFirstButtonReturn else { return }
@@ -774,8 +817,22 @@ extension AppStore {
     /// Deletes the finished workers and their worktrees (branches are kept). A worktree with
     /// uncommitted changes is not removed, and its session stays as it is. Returns how many stayed.
     func removeFinishedWorkers(of id: UUID) async -> Int {
+        await removeWorkers(finishedWorkers(of: id))
+    }
+
+    /// Deletes the session and its workers, with the workers' worktrees (branches are kept).
+    /// A worker whose worktree has uncommitted changes stays, running or not, as a session of
+    /// its own. Returns how many stayed.
+    func deleteWithWorkers(_ id: UUID) async -> Int {
+        let kept = await removeWorkers(workers(of: id))
+        for w in workers(of: id) { update(w.id) { $0.parentID = nil } }
+        deleteSession(id)
+        return kept
+    }
+
+    private func removeWorkers(_ list: [Session]) async -> Int {
         var kept = 0
-        for w in finishedWorkers(of: id) {
+        for w in list {
             // Shared worktrees (the parent's own, or another session's) are not this worker's to remove.
             let shared = sessions.contains { $0.id != w.id && $0.worktreePath == w.worktreePath }
             if let path = w.worktreePath, !shared, let p = project(w.projectID) {
