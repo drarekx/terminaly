@@ -23,6 +23,7 @@ Dependencias: SwiftTerm (terminal), Sparkle 2 (auto-update). Nada más.
 - Consumo: `stats` devuelve memoria (`ri_phys_footprint`) y tiempo de CPU de cada árbol de sesión y del daemon (`TerminalyKit/ProcessStats.swift`, libproc). El % de CPU lo calcula la app entre muestras (`Model/ResourceMonitor.swift`), que solo muestrea mientras una vista lo muestra y la app está activa: pie de la barra lateral (10 s) y popover de recursos (2 s).
 - Backlog por cliente: 8 MB (`Client.maxBacklog`); pasarlo cierra al cliente. Los replays de `attach` pendientes no cuentan (`Client.sendReplay`, uno por sesión como máximo): al conectarse la app hace `attach` de todas las sesiones a la vez, hasta 2 MB cada una, y antes el daemon la echaba y todas salían como `exited`. Paso 10 del self-test.
 - Se cierra solo tras 60 s sin sesiones vivas ni clientes.
+- Reiniciar desde la app: Ajustes → General → «Reiniciar el servicio de sesiones…» (`AppStore.confirmRestartHost` → `TerminalRegistry.restartHost`). Manda `shutdown`, espera a que el daemon cierre la conexión (o 3 s), se conecta a uno nuevo arrancado desde el `tly` de la app, reanuda las sesiones que estaban en marcha y tienen conversación guardada (el resto queda parado) y relanza `tly web` si está activado. Es la forma de cargar el código nuevo del daemon tras una actualización. El daemon viejo, si lo arrancó la app, queda como zombi hasta que la app se cierra (nadie hace `waitpid`). Paso 11 del self-test (la reanudación no se cubre: necesita un `claude` real).
 - Socket: `~/Library/Application Support/Terminaly/tly.sock`, permisos 0600, solo acepta peers con el mismo UID.
 
 ### Swarm (workers)
@@ -114,7 +115,7 @@ TERMINALY_STATE_DIR=<dir con state.json> TERMINALY_SNAPSHOT_DIR=<out> build/Term
 ./scripts/release.sh 0.3.0 "notas"            # publica release + appcast (ver abajo)
 ```
 
-- **Verifica siempre con `--selftest`** antes de commitear cambios en store, daemon o protocolo. Cubre: workspaces (y migración si `SELFTEST_EXPECT_LEGACY_PROJECTS=N`), hooks → needsInput, heurística working → idle, reinicio simulado de la app con replay, pausa (paso 8: CPU parada y reanudada) swarm (paso 9: worker adoptado bajo su padre, prompt inicial, resultado del turno, `ask` ante un permiso, volver de «Ver swarm»), workers que siguen a su jefe (paso 9b) y reconexión con replays grandes (paso 10).
+- **Verifica siempre con `--selftest`** antes de commitear cambios en store, daemon o protocolo. Cubre: workspaces (y migración si `SELFTEST_EXPECT_LEGACY_PROJECTS=N`), hooks → needsInput, heurística working → idle, reinicio simulado de la app con replay, pausa (paso 8: CPU parada y reanudada) swarm (paso 9: worker adoptado bajo su padre, prompt inicial, resultado del turno, `ask` ante un permiso, volver de «Ver swarm»), workers que siguen a su jefe (paso 9b) reconexión con replays grandes (paso 10) y reinicio del daemon desde la app (paso 11).
 - Para cambios visuales usa el modo snapshot: no hay permiso de grabación de pantalla, pero la app se pinta a sí misma (`cacheDisplay`). Siembra un `state.json` de prueba en un directorio temporal; nunca uses el estado real del usuario.
 - Usa siempre `TERMINALY_STATE_DIR` en pruebas: si no, tocarías `~/Library/Application Support/Terminaly` (datos reales y el daemon real).
 
@@ -142,7 +143,7 @@ TERMINALY_STATE_DIR=<dir con state.json> TERMINALY_SNAPSHOT_DIR=<out> build/Term
 - **Quitar una sesión viva** (`remove`): el daemon la guarda en `dying` hasta que su proceso sale. Si se suelta antes, el `HostedSession` se libera, nadie lee ni cierra el PTY y la shell se queda colgada para siempre a medio salir (estado `E` en `ps`), con el agente detrás. `terminate` manda SIGHUP a todo el árbol por ppid (los agentes corren en su propio grupo de procesos y la señal al grupo de la shell no les llega) y a los 2 s SIGKILL a lo que siga en la sesión de terminal (`getsid == pid` de la shell). Encontrado el 2026-11-13 al cerrar workers de un swarm con `tly rm`.
 - `SyncConnection.request` guarda los eventos que llegan antes de la respuesta en otra cola; no los vuelvas a meter en la de lectura (bucle infinito).
 - Instalación limpia sin `state.json`: el store crea el workspace "Personal" en `init`. Cualquier dato nuevo debe tener un valor por defecto válido en ese caso.
-- Al reinstalar o actualizar la app, las sesiones siguen vivas en el daemon; la app nueva se vuelve a conectar. No mates `tly daemon` sin preguntar: corta los agentes del usuario.
+- Al reinstalar o actualizar la app, las sesiones siguen vivas en el daemon; la app nueva se vuelve a conectar. No mates `tly daemon` sin preguntar: corta los agentes del usuario. El usuario puede reiniciarlo él mismo desde Ajustes → General.
 
 ## Convenciones
 

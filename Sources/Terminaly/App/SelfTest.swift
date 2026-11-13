@@ -273,6 +273,23 @@ enum SelfTest {
         print("10 replay backlog: flooded=\(flooded) replayed=\(replayed) kept=\(kept)")
         guard flooded && replayed && kept else { return finish(false, "replay backlog") }
 
+        // 11. Restarting the host from the app: the old one goes with its sessions and a new one takes over.
+        let pidBefore = hostPID()
+        await withCheckedContinuation { cont in store.restartHost { _ in cont.resume() } }
+        let ended = ids.allSatisfy { !store.terminals.isRunning($0) }
+        let none = await liveSessions(store).isEmpty
+        guard let fresh = store.newSession(preset: Preset(label: "Fresh", command: "echo NEW_HOST; sleep 30"), in: project) else { return finish(false, "create") }
+        let works = await waitUntil(5) { store.terminals.view(for: fresh.id)?.screenText().contains("NEW_HOST") ?? false }
+        let pidAfter = hostPID()
+        // The app started the old host, so it stays as a zombie (no executable) until the app quits.
+        let gone = await waitUntil(5) {
+            var path = [CChar](repeating: 0, count: 4096)
+            return proc_pidpath(pidBefore, &path, 4096) <= 0
+        }
+        let replaced = pidBefore > 0 && pidAfter > 0 && pidAfter != pidBefore && gone
+        print("11 restart host: replaced=\(replaced) ended=\(ended) empty=\(none) works=\(works)")
+        guard replaced && ended && none && works else { return finish(false, "restart host") }
+
         finish(true, "")
     }
 
@@ -294,6 +311,21 @@ enum SelfTest {
                 p.waitUntilExit()
                 cont.resume(returning: (String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines),
                                         p.terminationStatus))
+            }
+        }
+    }
+
+    /// The host logs its pid when it starts listening.
+    private static func hostPID() -> pid_t {
+        let log = (try? String(contentsOfFile: TerminalyPaths.log, encoding: .utf8)) ?? ""
+        let line = log.split(separator: "\n").last { $0.contains("listening on") } ?? ""
+        return pid_t(line.split(separator: " ").last ?? "") ?? 0
+    }
+
+    private static func liveSessions(_ store: AppStore) async -> [SessionInfo] {
+        await withCheckedContinuation { cont in
+            store.terminals.client.request(Message(type: "list")) { reply in
+                cont.resume(returning: (reply.sessions ?? []).filter(\.running))
             }
         }
     }

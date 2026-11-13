@@ -254,3 +254,8 @@
 "The agent is working or waiting for your answer. Restarting stops it and starts a new process." = "El agente está trabajando o esperando tu respuesta. Al reiniciar se detiene y arranca un proceso nuevo.";
 "Its %lld workers and their worktrees are deleted too. Branches are kept. A worktree with uncommitted changes stays, with its session. Running sessions that will be stopped: %lld." = "También se eliminan sus %lld workers y sus worktrees. Las ramas se conservan. Un worktree con cambios sin commit se queda, con su sesión. Sesiones en marcha que se detendrán: %lld.";
 "This session or its workers are working or waiting for your answer. Archiving stops them all." = "Esta sesión o sus workers están trabajando o esperando tu respuesta. Al archivar se detienen todos.";
+"Restart Session Host…" = "Reiniciar el servicio de sesiones…";
+"Restart the session host?" = "¿Reiniciar el servicio de sesiones?";
+"Running sessions that will be stopped: %lld. Agents with a saved conversation are resumed afterwards: %lld. The rest stay stopped." = "Sesiones en marcha que se detendrán: %lld. Agentes con conversación guardada que se reanudan después: %lld. El resto se queda parado.";
+"Restarted. Sessions resumed: %lld." = "Reiniciado. Sesiones reanudadas: %lld.";
+"After an update, the host keeps running the old version until it is restarted. Restarting stops every running session; agents with a saved conversation are resumed." = "Tras una actualización, el servicio sigue con la versión anterior hasta que se reinicia. Al reiniciarlo se detienen todas las sesiones en marcha; los agentes con conversación guardada se reanudan.";

@@ -136,6 +136,7 @@ final class TerminalRegistry {
     fileprivate var running: Set<UUID> = []
     /// Sessions this app asked the host to create; their `sessions` event arrives before the reply.
     private var starting: Set<UUID> = []
+    private var afterDisconnect: (() -> Void)?
 
     init() {
         client.onOutput = { [weak self] id, bytes in
@@ -148,6 +149,7 @@ final class TerminalRegistry {
             guard let self else { return }
             for id in self.running { self.store?.applyStatus(id, status: "exited", detail: nil, notify: false, exitCode: nil) }
             self.running.removeAll()
+            self.afterDisconnect?()
         }
     }
 
@@ -299,6 +301,27 @@ final class TerminalRegistry {
 }
 
 extension TerminalRegistry {
+    /// Shuts the host down, sessions included, and connects to a new one, started from this app's `tly`.
+    func restartHost(completion: @escaping ([SessionInfo]) -> Void) {
+        guard client.isConnected else { return connect(completion: completion) }
+        var done = false
+        let reconnect = { [weak self] in
+            guard let self, !done else { return }
+            done = true
+            self.afterDisconnect = nil
+            // The timeout path: the old host never closed the connection.
+            self.client.disconnect()
+            for id in self.running { self.store?.applyStatus(id, status: "exited", detail: nil, notify: false, exitCode: nil) }
+            self.running.removeAll()
+            self.connect(completion: completion)
+        }
+        // The old host removes its socket at once and closes the connection as it exits: only then is
+        // there nothing to connect to, and a new host gets started.
+        afterDisconnect = reconnect
+        client.request(Message(type: "shutdown"))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { reconnect() }
+    }
+
     /// Self-test helper: drops the connection and all views as if the app had quit, then reconnects.
     func simulateRelaunch(completion: @escaping ([SessionInfo]) -> Void) {
         client.disconnect()

@@ -263,6 +263,8 @@ private struct GeneralSettings: View {
     @State private var updater = Updater.shared
     @State private var language = AppLanguage.current
     @State private var languageChanged = false
+    @State private var hostNote: String?
+    @Environment(AppStore.self) private var store
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -310,6 +312,21 @@ private struct GeneralSettings: View {
                 Text("Updates are only available in the bundled app (scripts/bundle.sh).")
                     .foregroundStyle(.secondary)
             }
+            }
+            Section("Session host (tly)") {
+                HStack {
+                    Button("Restart Session Host…") {
+                        hostNote = nil
+                        store.confirmRestartHost { resumed in
+                            hostNote = String(localized: "Restarted. Sessions resumed: \(resumed).")
+                        }
+                    }
+                    if let hostNote {
+                        Text(hostNote).font(Theme.Font.caption).foregroundStyle(Theme.secondaryText)
+                    }
+                }
+                Text("After an update, the host keeps running the old version until it is restarted. Restarting stops every running session; agents with a saved conversation are resumed.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section {
                 Button("Buy Me a Coffee ☕") { openURL(Links.buyMeACoffee) }

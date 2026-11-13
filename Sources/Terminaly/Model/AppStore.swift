@@ -563,6 +563,41 @@ extension AppStore {
         }
     }
 
+    /// Replaces the session host (`tly daemon`), e.g. one left running by an older version of the app.
+    /// Every session ends with it; the agents that have a saved conversation continue it in the new host.
+    func restartHost(completion: ((_ resumed: Int) -> Void)? = nil) {
+        let live = sessions.filter { terminals.isRunning($0.id) }.map(\.id)
+        terminals.restartHost { [weak self] infos in
+            guard let self else { return }
+            for info in infos where info.running { self.adopt(info) }
+            var resumed = 0
+            if self.terminals.client.isConnected {
+                for id in live {
+                    guard let command = self.session(id)?.resumeCommand, self.launch(id, command: command) else { continue }
+                    resumed += 1
+                }
+            }
+            // The web bridge belongs to the same install: replace it too.
+            WebAccess.shared.startIfEnabled()
+            self.scheduleSave()
+            completion?(resumed)
+        }
+    }
+
+    func confirmRestartHost(completion: ((_ resumed: Int) -> Void)? = nil) {
+        let live = sessions.filter { terminals.isRunning($0.id) }
+        if !live.isEmpty {
+            let resumable = live.filter { $0.resumeCommand != nil }.count
+            let alert = NSAlert()
+            alert.messageText = String(localized: "Restart the session host?")
+            alert.informativeText = String(localized: "Running sessions that will be stopped: \(live.count). Agents with a saved conversation are resumed afterwards: \(resumable). The rest stay stopped.")
+            alert.addButton(withTitle: String(localized: "Restart"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        restartHost(completion: completion)
+    }
+
     /// Deletes the session, asking first if its process is still running.
     func confirmDeleteSession(_ id: UUID) {
         guard let s = session(id) else { return }
