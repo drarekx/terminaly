@@ -191,6 +191,17 @@ enum SelfTest {
         let pluginOK = OpenCodePluginInstaller.state(in: skills) == .current
         try? OpenCodePluginInstaller.uninstall(in: skills)
         let pluginGone = OpenCodePluginInstaller.state(in: skills) == .missing
+        // Codex hooks go next to the user's own, which must survive installing and removing ours.
+        let codexFile = skills.appendingPathComponent("hooks.json")
+        try? FileManager.default.createDirectory(at: skills, withIntermediateDirectories: true)
+        try? #"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"true"}]}]}}"#.write(to: codexFile, atomically: true, encoding: .utf8)
+        try? CodexHookInstaller.install(in: skills)
+        let codexText = (try? String(contentsOf: codexFile, encoding: .utf8)) ?? ""
+        let codexOK = CodexHookInstaller.isInstalled(in: skills) && codexText.contains("PermissionRequest") && codexText.contains(#""true""#)
+        try? CodexHookInstaller.uninstall(in: skills)
+        let codexAfter = (try? String(contentsOf: codexFile, encoding: .utf8)) ?? ""
+        let codexGone = !CodexHookInstaller.isInstalled(in: skills) && codexAfter.contains(#""true""#)
+            && AgentResume.command(for: "codex", agentSessionID: "abc-1") == "codex resume abc-1"
         // Show Swarm keeps the previous layout (also when run twice) and Back to Layout restores it.
         let before = store.layout
         store.showSwarm(busy.id)
@@ -199,9 +210,9 @@ enum SelfTest {
         store.restoreLayoutBeforeSwarm()
         let restored = grid && store.layout == before && !store.canRestoreLayoutBeforeSwarm
         let askRefused = refused.code == 2 && untouched
-        print("9 swarm: layoutBack=\(restored) adopted=\(adopted) result=\(answer == "A:swarm") noNesting=\(nested.code != 0) askTimeout=\(asked.code == 3) askRefused=\(askRefused) limit=\(overLimit.code != 0) skill=\(skillOK && skillGone) plugin=\(pluginOK && pluginGone)")
+        print("9 swarm: layoutBack=\(restored) adopted=\(adopted) result=\(answer == "A:swarm") noNesting=\(nested.code != 0) askTimeout=\(asked.code == 3) askRefused=\(askRefused) limit=\(overLimit.code != 0) skill=\(skillOK && skillGone) plugin=\(pluginOK && pluginGone) codex=\(codexOK && codexGone)")
         guard restored && adopted && answer == "A:swarm" && nested.code != 0 && asked.code == 3 && askRefused && overLimit.code != 0
-                && skillOK && skillGone && pluginOK && pluginGone else { return finish(false, "swarm") }
+                && skillOK && skillGone && pluginOK && pluginGone && codexOK && codexGone else { return finish(false, "swarm") }
 
         // 9b. A session's workers follow it: they stop and are archived with it, and deleting it deletes
         // them and their worktrees, except a worktree with uncommitted changes, which stays with its session.

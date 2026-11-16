@@ -51,6 +51,8 @@ private struct PresetsSettings: View {
 private struct IntegrationsSettings: View {
     @State private var installed = ClaudeHookInstaller.isInstalled
     @State private var error: String?
+    @State private var codex = CodexHookInstaller.isInstalled()
+    @State private var codexError: String?
     @State private var openCode = OpenCodePluginInstaller.state()
     @State private var openCodeError: String?
     @State private var skill = SwarmSkillInstaller.state()
@@ -75,6 +77,23 @@ private struct IntegrationsSettings: View {
                     }
                 }
                 if let error { Text(error).foregroundStyle(.red).font(.caption) }
+            }
+            Section("Codex") {
+                LabeledContent("Status hooks") {
+                    Text(codex ? LocalizedStringKey("Installed") : LocalizedStringKey("Not installed"))
+                        .foregroundStyle(codex ? .green : .secondary)
+                }
+                Text("Adds hooks to ~/.codex/hooks.json so Codex sessions report Working / Ready / Needs input, trigger notifications and can be resumed. Hooks do nothing outside Terminaly. A backup is saved as hooks.json.terminaly-backup. Codex ignores new hooks until you trust them: type /hooks in a Codex session once after installing.")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Button(codex ? LocalizedStringKey("Reinstall Hooks") : LocalizedStringKey("Install Hooks")) {
+                        runCodex { try CodexHookInstaller.install() }
+                    }
+                    if codex {
+                        Button("Remove Hooks") { runCodex { try CodexHookInstaller.uninstall() } }
+                    }
+                }
+                if let codexError { Text(codexError).foregroundStyle(.red).font(.caption) }
             }
             Section("OpenCode") {
                 LabeledContent("Status plugin") {
@@ -139,6 +158,16 @@ private struct IntegrationsSettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func runCodex(_ op: () throws -> Void) {
+        do {
+            try op()
+            codexError = nil
+        } catch {
+            codexError = error.localizedDescription
+        }
+        codex = CodexHookInstaller.isInstalled()
     }
 
     private func runOpenCode(_ op: () throws -> Void) {

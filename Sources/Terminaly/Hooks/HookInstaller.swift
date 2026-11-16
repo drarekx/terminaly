@@ -33,7 +33,7 @@ enum ClaudeHookInstaller {
 
     /// Idempotent: removes previous Terminaly entries, then adds current ones. Backs up the original file.
     static func install() throws {
-        try rewrite { hooks in
+        try rewrite(settingsURL, invalid: InstallError.invalidJSON) { hooks in
             for event in events {
                 var entry: [String: Any] = ["hooks": [["type": "command", "command": command(for: event)]]]
                 if toolEvents.contains(event) { entry["matcher"] = "*" }
@@ -43,15 +43,16 @@ enum ClaudeHookInstaller {
     }
 
     static func uninstall() throws {
-        try rewrite { _ in }
+        try rewrite(settingsURL, invalid: InstallError.invalidJSON) { _ in }
     }
 
-    private static func rewrite(_ add: (inout [String: Any]) -> Void) throws {
+    /// Rewrites the `hooks` table of a JSON settings file, keeping everything that is not Terminaly's.
+    static func rewrite(_ settingsURL: URL, invalid: Error, _ add: (inout [String: Any]) -> Void) throws {
         let fm = FileManager.default
         var root: [String: Any] = [:]
         if let data = try? Data(contentsOf: settingsURL) {
             guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                throw InstallError.invalidJSON
+                throw invalid
             }
             root = obj
             let backup = settingsURL.appendingPathExtension("terminaly-backup")
@@ -74,4 +75,42 @@ enum ClaudeHookInstaller {
                                               options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
         try data.write(to: settingsURL, options: .atomic)
     }
+}
+
+/// Adds the same status hooks to Codex (`~/.codex/hooks.json`): its hook events and payloads follow
+/// Claude Code's. Codex skips new or changed hooks until the user trusts them with `/hooks`.
+enum CodexHookInstaller {
+    /// No `Notification` in Codex; `SubagentStop` says nothing about the turn.
+    static let events = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
+                         "PermissionRequest", "Stop", "SessionEnd"]
+
+    static var defaultHome: URL {
+        ProcessInfo.processInfo.environment["CODEX_HOME"].map { URL(fileURLWithPath: $0) }
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
+    }
+
+    static func isInstalled(in home: URL = defaultHome) -> Bool {
+        (try? String(contentsOf: file(in: home), encoding: .utf8))?.contains(ClaudeHookInstaller.marker) ?? false
+    }
+
+    enum InstallError: LocalizedError {
+        case invalidJSON
+        var errorDescription: String? { String(localized: "~/.codex/hooks.json is not valid JSON; left untouched.") }
+    }
+
+    static func install(in home: URL = defaultHome) throws {
+        try ClaudeHookInstaller.rewrite(file(in: home), invalid: InstallError.invalidJSON) { hooks in
+            for event in events {
+                // Without a timeout Codex would wait up to 10 minutes for a hook.
+                let hook: [String: Any] = ["type": "command", "command": ClaudeHookInstaller.command(for: event), "timeout": 5]
+                hooks[event] = (hooks[event] as? [Any] ?? []) + [["hooks": [hook]]]
+            }
+        }
+    }
+
+    static func uninstall(in home: URL = defaultHome) throws {
+        try ClaudeHookInstaller.rewrite(file(in: home), invalid: InstallError.invalidJSON) { _ in }
+    }
+
+    private static func file(in home: URL) -> URL { home.appendingPathComponent("hooks.json") }
 }
