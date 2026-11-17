@@ -301,6 +301,29 @@ enum SelfTest {
         print("11 restart host: replaced=\(replaced) ended=\(ended) empty=\(none) works=\(works)")
         guard replaced && ended && none && works else { return finish(false, "restart host") }
 
+        // 12. A hung host (stopped: it still accepts connections, never replies): a new session must not
+        // sit in Starting, and restarting the host must replace it even though it never runs `shutdown`.
+        guard let hungPID = store.terminals.client.hostPID, hungPID == pidAfter else { return finish(false, "host pid") }
+        TerminalRegistry.replyTimeout = 1.5
+        kill(hungPID, SIGSTOP)
+        let timeoutsBefore = store.hostTimeouts
+        guard let stuck = store.newSession(preset: Preset(label: "Stuck", command: "echo NEVER"), in: project) else { return finish(false, "create") }
+        let gaveUp = await waitUntil(5) { store.session(stuck.id)?.status == .exited && store.hostTimeouts > timeoutsBefore }
+        await withCheckedContinuation { cont in store.restartHost { _ in cont.resume() } }
+        TerminalRegistry.replyTimeout = 8
+        let killed = await waitUntil(3) {
+            var path = [CChar](repeating: 0, count: 4096)
+            return proc_pidpath(hungPID, &path, 4096) <= 0
+        }
+        guard let after = store.newSession(preset: Preset(label: "After", command: "echo AFTER_HUNG; sleep 30"), in: project) else { return finish(false, "create") }
+        let recovered = await waitUntil(5) { store.terminals.view(for: after.id)?.screenText().contains("AFTER_HUNG") ?? false }
+        let newPID = store.terminals.client.hostPID ?? 0
+        print("12 hung host: gaveUp=\(gaveUp) killed=\(killed) recovered=\(recovered) newHost=\(newPID != hungPID && newPID > 0)")
+        guard gaveUp && killed && recovered && newPID != hungPID && newPID > 0 else {
+            kill(hungPID, SIGKILL)
+            return finish(false, "hung host")
+        }
+
         finish(true, "")
     }
 

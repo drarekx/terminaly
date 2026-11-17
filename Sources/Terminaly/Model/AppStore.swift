@@ -28,6 +28,9 @@ final class AppStore {
     var worktreeRequestProjectID: UUID?
     /// Layout each workspace had before Show Swarm replaced it; runtime only.
     var layoutsBeforeSwarm: [UUID: PaneNode] = [:]
+    /// Times a request ran out against a hung host; the self-test reads it instead of an alert.
+    private(set) var hostTimeouts = 0
+    @ObservationIgnored private var hostAlertShown = false
 
     @ObservationIgnored let terminals = TerminalRegistry()
     @ObservationIgnored let resources = ResourceMonitor()
@@ -581,6 +584,25 @@ extension AppStore {
             WebAccess.shared.startIfEnabled()
             self.scheduleSave()
             completion?(resumed)
+        }
+    }
+
+    /// The host accepted the connection but didn't answer in time: offer to replace it (one alert at a time).
+    func hostNotResponding() {
+        hostTimeouts += 1
+        guard !hostAlertShown, !CommandLine.arguments.contains("--selftest") else { return }
+        hostAlertShown = true
+        // Not inside the socket callback: a modal loop there would hold every other reply.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let alert = NSAlert()
+            alert.messageText = String(localized: "The session host is not responding")
+            alert.informativeText = String(localized: "New sessions can't start. Restarting the host stops the sessions it was running; agents with a saved conversation are resumed afterwards.")
+            alert.addButton(withTitle: String(localized: "Restart Session Host"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
+            let restart = alert.runModal() == .alertFirstButtonReturn
+            self.hostAlertShown = false
+            if restart { self.restartHost() }
         }
     }
 

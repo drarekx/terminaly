@@ -137,6 +137,9 @@ final class TerminalRegistry {
     /// Sessions this app asked the host to create; their `sessions` event arrives before the reply.
     private var starting: Set<UUID> = []
     private var afterDisconnect: (() -> Void)?
+    /// A host that takes longer than this to answer is taken as hung: it accepts connections
+    /// (the kernel does) but its queue never runs, so sessions would sit in Starting forever.
+    static var replyTimeout: TimeInterval = 8
 
     init() {
         client.onOutput = { [weak self] id, bytes in
@@ -166,8 +169,9 @@ final class TerminalRegistry {
             completion([])
             return
         }
-        client.request(Message(type: "list")) { [weak self] reply in
+        client.request(Message(type: "list"), timeout: Self.replyTimeout) { [weak self] reply in
             guard let self else { return }
+            if reply.error == DaemonClient.timeoutError { self.store?.hostNotResponding() }
             let list = reply.sessions ?? []
             for info in list where info.running {
                 self.running.insert(info.id)
@@ -192,12 +196,15 @@ final class TerminalRegistry {
         m.cwd = cwd
         (m.cols, m.rows) = view.gridSize
         starting.insert(session.id)
-        client.request(m) { [weak self] reply in
+        client.request(m, timeout: Self.replyTimeout) { [weak self] reply in
             guard let self else { return }
             self.starting.remove(session.id)
             if let error = reply.error {
-                view.feed(text: "\r\n[Terminaly] could not start session: \(error)\r\n")
+                let hung = error == DaemonClient.timeoutError
+                view.feed(text: hung ? "\r\n[Terminaly] the session host is not responding\r\n"
+                                     : "\r\n[Terminaly] could not start session: \(error)\r\n")
                 self.store?.applyStatus(session.id, status: "exited", detail: nil, notify: false, exitCode: nil)
+                if hung { self.store?.hostNotResponding() }
                 return
             }
             self.running.insert(session.id)
@@ -305,21 +312,36 @@ extension TerminalRegistry {
     func restartHost(completion: @escaping ([SessionInfo]) -> Void) {
         guard client.isConnected else { return connect(completion: completion) }
         var done = false
-        let reconnect = { [weak self] in
+        let oldPID = client.hostPID
+        let reconnect = { [weak self] (hung: Bool) in
             guard let self, !done else { return }
             done = true
             self.afterDisconnect = nil
             // The timeout path: the old host never closed the connection.
             self.client.disconnect()
+            // A hung host never runs `shutdown` and keeps the socket: new connections would reach it again.
+            if hung, let oldPID { Self.killIfAlive(oldPID) }
             for id in self.running { self.store?.applyStatus(id, status: "exited", detail: nil, notify: false, exitCode: nil) }
             self.running.removeAll()
             self.connect(completion: completion)
         }
         // The old host removes its socket at once and closes the connection as it exits: only then is
         // there nothing to connect to, and a new host gets started.
-        afterDisconnect = reconnect
+        afterDisconnect = { reconnect(false) }
         client.request(Message(type: "shutdown"))
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { reconnect() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { reconnect(true) }
+    }
+
+    /// SIGKILL, then waits (up to 1 s) for it to be gone, reaping it if the app started it.
+    private static func killIfAlive(_ pid: pid_t) {
+        var status: Int32 = 0
+        if waitpid(pid, &status, WNOHANG) == pid || kill(pid, 0) != 0 { return }
+        NSLog("Terminaly: session host \(pid) did not shut down, killing it")
+        kill(pid, SIGKILL)
+        for _ in 0..<20 {
+            if waitpid(pid, &status, WNOHANG) == pid || kill(pid, 0) != 0 { return }
+            usleep(50_000)
+        }
     }
 
     /// Self-test helper: drops the connection and all views as if the app had quit, then reconnects.

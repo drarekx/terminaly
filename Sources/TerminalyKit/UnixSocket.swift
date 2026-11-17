@@ -75,6 +75,14 @@ public enum UnixSocket {
         return getpeereid(fd, &uid, &gid) == 0 && uid == getuid()
     }
 
+    /// Pid of the process on the other end (the one holding the listening socket, for a client).
+    public static func peerPID(_ fd: Int32) -> pid_t? {
+        var pid: pid_t = 0
+        var len = socklen_t(MemoryLayout<pid_t>.size)
+        guard getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &len) == 0, pid > 0 else { return nil }
+        return pid
+    }
+
     /// Blocking write of the whole buffer.
     public static func writeAll(_ fd: Int32, _ bytes: [UInt8]) -> Bool {
         var off = 0

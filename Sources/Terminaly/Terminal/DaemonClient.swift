@@ -17,6 +17,8 @@ final class DaemonClient {
     var onDisconnect: (() -> Void)?
 
     var isConnected: Bool { fd >= 0 }
+    /// The host process: a hung one accepts connections but never replies, and is killed by pid.
+    private(set) var hostPID: pid_t?
 
     /// `tly` ships next to the app executable (also true for `swift build` output).
     static var tlyPath: String {
@@ -28,6 +30,7 @@ final class DaemonClient {
         let fd = try DaemonLauncher.connect(tlyPath: Self.tlyPath)
         UnixSocket.setNonBlocking(fd)
         self.fd = fd
+        hostPID = UnixSocket.peerPID(fd)
         decoder = FrameDecoder()
         writer = SocketWriter(fd: fd, queue: .main)
         let rs = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
@@ -46,6 +49,7 @@ final class DaemonClient {
         readSource?.cancel()
         readSource = nil
         fd = -1
+        hostPID = nil
         let waiting = pending
         pending.removeAll()
         var err = Message(type: "error")
@@ -84,7 +88,8 @@ final class DaemonClient {
         }
     }
 
-    func request(_ msg: Message, reply: ((Message) -> Void)? = nil) {
+    /// With a timeout, `reply` gets a "timeout" error if the host hasn't answered by then (a late reply is dropped).
+    func request(_ msg: Message, timeout: TimeInterval? = nil, reply: ((Message) -> Void)? = nil) {
         if fd < 0 { try? connect() }
         guard let writer else {
             var err = Message(type: "error")
@@ -95,10 +100,23 @@ final class DaemonClient {
         var m = msg
         m.reqID = nextID
         nextID += 1
-        if let reply { pending[m.reqID!] = reply }
+        let rid = m.reqID!
+        if let reply {
+            pending[rid] = reply
+            if let timeout {
+                DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+                    guard let cb = self?.pending.removeValue(forKey: rid) else { return }
+                    var err = Message(type: "error")
+                    err.error = Self.timeoutError
+                    cb(err)
+                }
+            }
+        }
         writer.send(Frame.json(m))
         if writer.failed { lost() }
     }
+
+    static let timeoutError = "timeout"
 
     func sendInput(_ id: UUID, _ bytes: ArraySlice<UInt8>) {
         guard let writer else { return }
