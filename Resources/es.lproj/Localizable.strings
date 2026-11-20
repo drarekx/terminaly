@@ -274,3 +274,11 @@
 "Open in Terminaly" = "Abrir en Terminaly";
 "Terminaly: %lld sessions need input" = "Terminaly: %lld sesiones piden respuesta";
 "Terminaly" = "Terminaly";
+"Filter Sessions" = "Filtrar sesiones";
+"Filter sessions" = "Filtrar sesiones";
+"Clear search" = "Borrar la búsqueda";
+"Filter by status" = "Filtrar por estado";
+"Show" = "Mostrar";
+"All" = "Todas";
+"No sessions match" = "Ninguna sesión coincide";
+"Clear" = "Borrar";

@@ -64,6 +64,9 @@ struct AppCommands: Commands {
             Button("Next Session Needing Input") { store.focusNextAttention() }
                 .keyboardShortcut("j")
                 .disabled(!store.hasSessionNeedingInput)
+            // ⌘F stays with the terminal's own search.
+            Button("Filter Sessions") { SidebarFilterState.shared.requestFocus() }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
             Divider()
             Button("Rename Session…") { store.renamingSessionID = store.selectedSessionID }
                 .disabled(store.selectedSessionID == nil)

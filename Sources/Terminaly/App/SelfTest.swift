@@ -26,6 +26,7 @@ enum SelfTest {
     private static func steps(_ store: AppStore) async {
         // 0. Workspaces: legacy migration (when seeded), per-workspace layouts, moving projects.
         if !workspaceChecks(store) { return }
+        if !filterChecks() { return finish(false, "sidebar filter") }
 
         let project = store.addProject(at: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
         if let ws = store.selectedWorkspaceID { store.moveProject(project.id, to: ws) }
@@ -427,6 +428,37 @@ enum SelfTest {
         store.removeProject(store.project(p.id)!)
         if !ok { finish(false, "workspaces") }
         return ok
+    }
+
+    /// Sidebar filter: text in name/project/branch, status, parents and workers kept together.
+    private static func filterChecks() -> Bool {
+        let pid = UUID()
+        func s(_ title: String, _ status: SessionStatus, branch: String? = nil) -> Session {
+            var s = Session(projectID: pid, title: title, command: "", symbol: "terminal")
+            s.status = status
+            s.branch = branch
+            return s
+        }
+        let boss = s("Jefe", .idle), w1 = s("Worker Álgebra", .needsInput), w2 = s("Docs", .working, branch: "feat/búsqueda")
+        let solo = s("Shell", .working)
+        let groups = [(session: boss, workers: [w1, w2], collapsed: false), (session: solo, workers: [], collapsed: false)]
+        func titles(_ f: SessionFilter, collapsed: Bool = false) -> [String] {
+            var g = groups
+            g[0].collapsed = collapsed
+            return f.rows(g, projectName: "Proyecto Ñandú").map(\.session.title)
+        }
+        let checks = [
+            titles(SessionFilter()) == ["Jefe", "Worker Álgebra", "Docs", "Shell"],
+            titles(SessionFilter(query: "algebra")) == ["Jefe", "Worker Álgebra"],      // worker keeps its parent
+            titles(SessionFilter(query: "JEFE")) == ["Jefe", "Worker Álgebra", "Docs"], // parent keeps its workers
+            titles(SessionFilter(query: "busqueda")) == ["Jefe", "Docs"],               // branch, no accents
+            titles(SessionFilter(query: "nandu sh")) == ["Shell"],                      // project name + title
+            titles(SessionFilter(status: .needsInput), collapsed: true) == ["Jefe", "Worker Álgebra"],
+            titles(SessionFilter(status: .working)) == ["Jefe", "Docs", "Shell"],
+            titles(SessionFilter(query: "zzz")).isEmpty,
+        ]
+        print("0 sidebar filter: \(checks.map { $0 ? "ok" : "FAIL" })")
+        return !checks.contains(false)
     }
 
     /// Terminal views actually in the window, topmost per container (what the user sees).
