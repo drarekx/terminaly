@@ -21,6 +21,10 @@ struct CommandPaletteView: View {
             all.append(Item(id: "w\(ws.id)", title: String(localized: "Go to \(ws.name)"), subtitle: String(localized: "Workspace"),
                             symbol: ws.symbol) { store.selectWorkspace(ws.id) })
         }
+        if store.hasSessionNeedingInput {
+            all.append(Item(id: "next-attention", title: String(localized: "Next Session Needing Input"), subtitle: String(localized: "Session"),
+                            symbol: "bell.badge") { store.focusNextAttention() })
+        }
         for s in store.sessions where !s.archived {
             let project = store.project(s.projectID)?.name ?? ""
             let ws = store.workspace(of: s.id).map { "\($0.name) › " } ?? ""

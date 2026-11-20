@@ -61,6 +61,9 @@ struct AppCommands: Commands {
                 .keyboardShortcut("]")
             Button("Previous Session") { store.cycleSession(by: -1) }
                 .keyboardShortcut("[")
+            Button("Next Session Needing Input") { store.focusNextAttention() }
+                .keyboardShortcut("j")
+                .disabled(!store.hasSessionNeedingInput)
             Divider()
             Button("Rename Session…") { store.renamingSessionID = store.selectedSessionID }
                 .disabled(store.selectedSessionID == nil)
