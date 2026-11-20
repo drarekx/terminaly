@@ -109,6 +109,31 @@ enum SelfTest {
         print("6 switch: visible=\(visible.map { $0.sessionID == a.id ? "a" : $0.sessionID == b.id ? "b" : "?" }) ok=\(switched)")
         guard switched else { return finish(false, "switch") }
 
+        // 6b. Next session needing input: jumps across workspaces, to a session in no pane
+        let home = store.selectedWorkspaceID
+        let attnDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tly-attn-\(Int.random(in: 1000...9999))")
+        try? FileManager.default.createDirectory(at: attnDir, withIntermediateDirectories: true)
+        let attnWS = store.addWorkspace(name: "Attention")
+        let attnProject = store.addProject(at: attnDir)
+        let askCmd = "echo '{\"message\":\"selftest ask\"}' | ( \(hook) ); read -r x"
+        guard let d = store.newSession(preset: Preset(label: "Ask", command: askCmd), in: attnProject) else { return finish(false, "create") }
+        let asking = await waitUntil(5) { store.session(d.id)?.status == .needsInput }
+        store.layout = store.layout.clearing(d.id)
+        if let home { store.selectWorkspace(home) }
+        store.show(b.id)
+        var reached = false
+        for _ in 0..<store.sessions.count where !reached {
+            store.focusNextAttention()
+            reached = store.selectedSessionID == d.id
+        }
+        let jumped = reached && store.selectedWorkspaceID == attnWS.id && store.layout.leaf(showing: d.id) != nil
+        print("6b attention: asking=\(asking) jumped=\(jumped)")
+        store.removeProject(attnProject)
+        if let home { store.selectWorkspace(home) }
+        store.deleteWorkspace(attnWS.id)
+        try? FileManager.default.removeItem(at: attnDir)
+        guard asking && jumped else { return finish(false, "attention") }
+
         // 7. Worktree session: own folder and branch; removal keeps the branch
         let repo = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("tly-repo-\(Int.random(in: 1000...9999))")
         try? FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)

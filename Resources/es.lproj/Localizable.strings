@@ -264,3 +264,4 @@
 "The session host is not responding" = "El servicio de sesiones no responde";
 "New sessions can't start. Restarting the host stops the sessions it was running; agents with a saved conversation are resumed afterwards." = "Las sesiones nuevas no pueden arrancar. Reiniciar el servicio detiene las sesiones que tenía en marcha; los agentes con una conversación guardada se reanudan después.";
 "Restart Session Host" = "Reiniciar el servicio de sesiones";
+"Next Session Needing Input" = "Siguiente sesión que pide respuesta";

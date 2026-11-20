@@ -397,6 +397,33 @@ final class AppStore {
         show(order[(i + offset + order.count) % order.count])
     }
 
+    /// Every non-archived session in sidebar order across all workspaces. Workers of a collapsed
+    /// parent are included: a folded worker waiting for input must still be reachable.
+    private var allSessionsInSidebarOrder: [Session] {
+        workspaces.flatMap { projects(in: $0) }.flatMap { p in
+            sidebarSessions(in: p).flatMap { entry in
+                [entry.session] + (entry.session.workersCollapsed == true ? workers(of: entry.session.id) : [])
+            }
+        }
+        .filter { !$0.archived }
+    }
+
+    var hasSessionNeedingInput: Bool {
+        sessions.contains { !$0.archived && $0.status == .needsInput }
+    }
+
+    /// Shows the next session waiting for the user after the selected one, wrapping around
+    /// and switching workspace if needed. The selected one comes last, so a lone match is re-shown.
+    func focusNextAttention() {
+        let order = allSessionsInSidebarOrder
+        let start = selectedSessionID.flatMap { id in order.firstIndex { $0.id == id } } ?? -1
+        let next = order.indices.lazy
+            .map { order[(start + 1 + $0) % order.count] }
+            .first { $0.status == .needsInput }
+        guard let next else { return NSSound.beep() }
+        show(next.id)
+    }
+
     // MARK: Panes
 
     func focus(leaf: UUID) {
