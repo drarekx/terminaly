@@ -123,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         MainActor.assumeIsolated { Snapshot.runIfRequested() }
         if ProcessInfo.processInfo.environment["TERMINALY_SNAPSHOT_DIR"] == nil {
             MainActor.assumeIsolated { WebAccess.shared.startIfEnabled() }
+            MainActor.assumeIsolated { MenuBarItem.shared.start() }
         }
         if Notifier.available {
             UNUserNotificationCenter.current().delegate = self
@@ -130,7 +131,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    /// The menu bar icon keeps the app alive without windows; its rows reopen the main window.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        !MainActor.assumeIsolated { MenuBarItem.shared.isInstalled }
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // Sessions keep running in the `tly` host; they reattach on next launch.

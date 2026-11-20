@@ -293,6 +293,7 @@ private struct GeneralSettings: View {
     @State private var language = AppLanguage.current
     @State private var languageChanged = false
     @State private var hostNote: String?
+    @AppStorage(MenuBarItem.defaultsKey) private var showMenuBarIcon = true
     @Environment(AppStore.self) private var store
     @Environment(\.openURL) private var openURL
 
@@ -316,6 +317,11 @@ private struct GeneralSettings: View {
                             .buttonStyle(PrimaryButtonStyle(compact: true))
                     }
                 }
+            }
+            Section("Menu bar") {
+                Toggle("Show icon in the menu bar", isOn: $showMenuBarIcon)
+                Text("Shows the sessions that need input and answers permission requests without opening the window. While it is shown, closing the window keeps Terminaly running.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Updates") {
             LabeledContent("Version", value: Updater.currentVersion)

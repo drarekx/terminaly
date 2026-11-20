@@ -69,6 +69,7 @@ enum Snapshot {
                 }
             }
             renderMenus(to: url.appendingPathComponent("menus.png"))
+            if env["TERMINALY_SNAPSHOT_MENUBAR"] != nil { MenuBarItem.renderPreview(to: url.appendingPathComponent("menubar.png")) }
             if env["TERMINALY_SETTINGS_TAB"] != nil {
                 // The app menu's "Settings…" (⌘,) item opens the SwiftUI Settings scene.
                 if let appMenu = NSApp.mainMenu?.items.first?.submenu,
