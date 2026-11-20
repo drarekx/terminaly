@@ -61,6 +61,9 @@ struct AppCommands: Commands {
                 .keyboardShortcut("]")
             Button("Previous Session") { store.cycleSession(by: -1) }
                 .keyboardShortcut("[")
+            // ⌘F stays with the terminal's own search.
+            Button("Filter Sessions") { SidebarFilterState.shared.requestFocus() }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
             Divider()
             Button("Rename Session…") { store.renamingSessionID = store.selectedSessionID }
                 .disabled(store.selectedSessionID == nil)

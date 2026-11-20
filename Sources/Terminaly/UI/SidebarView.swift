@@ -52,6 +52,12 @@ struct SidebarView: View {
     }
 }
 
+private struct ListedProject: Identifiable {
+    let project: Project
+    let rows: [(session: Session, isWorker: Bool)]
+    var id: UUID { project.id }
+}
+
 /// One workspace: tinted background, title, project list.
 private struct WorkspacePage: View {
     @Environment(AppStore.self) private var store
@@ -60,6 +66,16 @@ private struct WorkspacePage: View {
     @State private var showArchived = false
 
     private var projects: [Project] { store.projects(in: workspace) }
+    private var filter: SessionFilter { SidebarFilterState.shared.filter }
+    /// Each project's rows; while filtering, projects without a match are left out.
+    private var listed: [ListedProject] {
+        let filter = filter
+        guard filter.isActive else { return projects.map { ListedProject(project: $0, rows: store.sidebarSessions(in: $0)) } }
+        return projects.compactMap { p in
+            let rows = filter.rows(store.sidebarGroups(in: p), projectName: p.name)
+            return rows.isEmpty ? nil : ListedProject(project: p, rows: rows)
+        }
+    }
     private var archived: [Session] {
         let ids = Set(projects.map(\.id))
         return store.sessions.filter { $0.archived && ids.contains($0.projectID) }
@@ -72,17 +88,27 @@ private struct WorkspacePage: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 4)
 
+            if !projects.isEmpty {
+                SidebarFilterBar(workspace: workspace)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 4)
+            }
+
             // Selection is drawn by SessionRow itself (design: white 10 % + workspace ring),
             // so the native, inactive-window-black highlight is not used.
             List {
-                ForEach(projects) { project in
+                let filtering = filter.isActive
+                ForEach(listed) { entry in
+                    let project = entry.project
+                    let rows = entry.rows
                     Section {
-                        if !project.collapsed {
-                            ForEach(store.sidebarSessions(in: project), id: \.session.id) { item in
+                        // While filtering, matches show even in collapsed projects.
+                        if filtering || !project.collapsed {
+                            ForEach(rows, id: \.session.id) { item in
                                 selectableRow(item.session, isWorker: item.isWorker)
                                     .contextMenu { sessionMenu(item.session) }
                             }
-                            if store.sessions(in: project).isEmpty {
+                            if rows.isEmpty {
                                 Text("No sessions")
                                     .font(Theme.Font.caption)
                                     .foregroundStyle(Theme.tertiaryText)
@@ -90,11 +116,17 @@ private struct WorkspacePage: View {
                             }
                         }
                     } header: {
-                        ProjectHeader(project: project)
+                        ProjectHeader(project: project, matches: filtering ? rows.count : nil)
                     }
                 }
 
-                if !archived.isEmpty {
+                if filtering && listed.isEmpty && !projects.isEmpty {
+                    SidebarNoMatches()
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+
+                if !archived.isEmpty && !filtering {
                     Section(isExpanded: $showArchived) {
                         ForEach(archived) { session in
                             selectableRow(session)
@@ -186,12 +218,14 @@ private struct WorkspacePage: View {
 private struct ProjectHeader: View {
     @Environment(AppStore.self) private var store
     let project: Project
+    /// Rows the sidebar filter left, while it is active.
+    var matches: Int? = nil
     @State private var hovering = false
     @State private var menuOpen = false
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: project.collapsed ? "chevron.right" : "chevron.down")
+            Image(systemName: project.collapsed && matches == nil ? "chevron.right" : "chevron.down")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(Theme.tertiaryText)
                 .frame(width: 12)
@@ -210,7 +244,7 @@ private struct ProjectHeader: View {
                 .foregroundStyle(Theme.secondaryText)
                 .lineLimit(1)
             Spacer()
-            let count = store.sessions(in: project).count
+            let count = matches ?? store.sessions(in: project).count
             if count > 0 && !(hovering || menuOpen) {
                 Text("\(count)")
                     .font(Theme.Font.caption)
