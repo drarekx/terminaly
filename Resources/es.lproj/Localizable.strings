@@ -265,3 +265,12 @@
 "New sessions can't start. Restarting the host stops the sessions it was running; agents with a saved conversation are resumed afterwards." = "Las sesiones nuevas no pueden arrancar. Reiniciar el servicio detiene las sesiones que tenía en marcha; los agentes con una conversación guardada se reanudan después.";
 "Restart Session Host" = "Reiniciar el servicio de sesiones";
 "Next Session Needing Input" = "Siguiente sesión que pide respuesta";
+"Menu bar" = "Barra de menús";
+"Show icon in the menu bar" = "Mostrar el icono en la barra de menús";
+"Shows the sessions that need input and answers permission requests without opening the window. While it is shown, closing the window keeps Terminaly running." = "Muestra las sesiones que piden respuesta y responde a los permisos sin abrir la ventana. Mientras se muestra, cerrar la ventana no cierra Terminaly.";
+"No session needs input" = "Ninguna sesión pide respuesta";
+"Open Terminaly" = "Abrir Terminaly";
+"Quit Terminaly" = "Salir de Terminaly";
+"Open in Terminaly" = "Abrir en Terminaly";
+"Terminaly: %lld sessions need input" = "Terminaly: %lld sesiones piden respuesta";
+"Terminaly" = "Terminaly";
