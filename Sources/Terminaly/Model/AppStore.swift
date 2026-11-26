@@ -709,6 +709,26 @@ extension AppStore {
     }
 
     /// Restarts the session, asking first if the agent is in the middle of a turn or waiting for an answer.
+    /// Stop from a place where one click is easy to get wrong (a row of icon buttons): asks if the
+    /// agent, or one of its workers, is in the middle of something.
+    func confirmStop(_ id: UUID) {
+        guard let s = session(id) else { return }
+        let team = workers(of: id)
+        if isBusy(s) || team.contains(where: isBusy) {
+            let alert = NSAlert()
+            alert.messageText = String(localized: "Stop “\(s.title)”?")
+            if team.isEmpty {
+                alert.informativeText = String(localized: "The agent is working or waiting for your answer. Stopping ends its process; a saved conversation can be resumed later.")
+            } else {
+                alert.informativeText = String(localized: "This session or its workers are working or waiting for your answer. Stopping ends them all; saved conversations can be resumed later.")
+            }
+            alert.addButton(withTitle: String(localized: "Stop"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        stop(id)
+    }
+
     func confirmRestart(_ id: UUID) {
         guard let s = session(id) else { return }
         if isBusy(s) {

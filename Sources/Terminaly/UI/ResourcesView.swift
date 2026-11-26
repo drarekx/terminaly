@@ -47,7 +47,7 @@ extension ResourcesButton {
     }
 }
 
-/// Memory and CPU per running session, plus the app and the session host. Pause/continue per row.
+/// Memory and CPU per running session, plus the app and the session host. Pause/continue and stop per row.
 struct ResourcesPopover: View {
     @Environment(AppStore.self) private var store
 
@@ -105,7 +105,7 @@ struct ResourcesPopover: View {
             }
         }
         .padding(14)
-        .frame(width: 380)
+        .frame(width: 410)
         .preferredColorScheme(.dark)
         .task { await monitor.run(every: .seconds(2)) }
     }
@@ -144,6 +144,12 @@ private struct SessionUsageRow: View {
             .buttonStyle(IconButtonStyle(size: 26))
             .help(session.status == .paused ? LocalizedStringKey("Continue") : LocalizedStringKey("Pause"))
             .accessibilityLabel(session.status == .paused ? LocalizedStringKey("Continue") : LocalizedStringKey("Pause"))
+            Button { store.confirmStop(session.id) } label: {
+                Image(systemName: "stop.fill")
+            }
+            .buttonStyle(IconButtonStyle(size: 26))
+            .help("Stop")
+            .accessibilityLabel("Stop")
         }
         .contentShape(Rectangle())
         .onTapGesture { store.show(session.id) }

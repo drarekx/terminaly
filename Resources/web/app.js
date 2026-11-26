@@ -30,6 +30,7 @@
       oneSession: "1 session", nSessions: "{n} sessions", runningPaused: "{r} running · {p} paused",
       noRunning: "No running sessions", host: "Session host (tly)",
       pauseIdle: "Pause idle sessions ({n})",
+      confirmStop: "Stop “{title}”? It is working or waiting for your answer. A saved conversation can be resumed later.",
       resizedBar: "Sized for another screen", fitHere: "Fit Here",
       resourcesNote: "Pausing stops all CPU use and keeps the session as it is; its memory stays allocated. To free memory, stop the session: Claude conversations can be resumed later.",
       dismiss: "Dismiss",
@@ -51,6 +52,7 @@
       oneSession: "1 sesión", nSessions: "{n} sesiones", runningPaused: "{r} en marcha · {p} en pausa",
       noRunning: "No hay sesiones en marcha", host: "Servicio de sesiones (tly)",
       pauseIdle: "Pausar sesiones inactivas ({n})",
+      confirmStop: "¿Detener «{title}»? Está trabajando o esperando tu respuesta. Si tiene conversación guardada, se puede reanudar después.",
       resizedBar: "Ajustado a otra pantalla", fitHere: "Ajustar aquí",
       resourcesNote: "Pausar detiene todo el uso de CPU y deja la sesión tal cual; la memoria sigue ocupada. Para liberarla, detén la sesión: las conversaciones de Claude se pueden reanudar después.",
       dismiss: "Descartar",
@@ -464,6 +466,15 @@
     }
   }
 
+  /// For a row of icon buttons, where a slip would end an agent in the middle of its work.
+  function confirmStop(id) {
+    const busy = [id, ...workerIDs(id)].some((sid) => isRunning(sid) && ["working", "needsInput"].includes(view(sid).status));
+    if (!busy || confirm(t("confirmStop", { title: view(id).title }))) {
+      stop(id);
+      setTimeout(pollStats, 300);
+    }
+  }
+
   function restart(id, resume) {
     if (!isRunning(id)) return start(id, resume);
     restartAfterExit.set(id, resume);
@@ -488,6 +499,7 @@
   const chevronIcon = '<svg class="chevron" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const moreIcon = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="3.5" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="12.5" cy="8" r="1.4" fill="currentColor"/></svg>';
   const pauseIcon = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="4" y="3" width="2.6" height="10" rx="0.8" fill="currentColor"/><rect x="9.4" y="3" width="2.6" height="10" rx="0.8" fill="currentColor"/></svg>';
+  const stopIcon = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1.6" fill="currentColor"/></svg>';
   const playIcon = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.4-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5z" fill="currentColor"/></svg>';
 
   function renderWorkspaces() {
@@ -808,7 +820,12 @@
       pause.setAttribute("aria-label", `${label}: ${v.title}`);
       pause.title = label;
       pause.onclick = (ev) => { ev.stopPropagation(); togglePause(s.id); };
-      r.append(dot, text, el("span", "num mem", u ? fmtMemory(u.memory) : "–"), el("span", "num cpu", fmtCPU(u?.cpu)), pause);
+      const halt = el("button", "icon-btn");
+      halt.innerHTML = stopIcon;
+      halt.setAttribute("aria-label", `${t("stop")}: ${v.title}`);
+      halt.title = t("stop");
+      halt.onclick = (ev) => { ev.stopPropagation(); confirmStop(s.id); };
+      r.append(dot, text, el("span", "num mem", u ? fmtMemory(u.memory) : "–"), el("span", "num cpu", fmtCPU(u?.cpu)), pause, halt);
       rows.append(r);
     }
     rows.append(el("hr", "usage-sep"));
@@ -816,7 +833,7 @@
     const hostText = el("span", "row-text");
     hostText.append(el("span", "row-title", t("host")));
     h.append(el("span"), hostText, el("span", "num mem", hostUsage ? fmtMemory(hostUsage.memory) : "–"),
-      el("span", "num cpu", fmtCPU(hostUsage?.cpu)), el("span"));
+      el("span", "num cpu", fmtCPU(hostUsage?.cpu)), el("span"), el("span"));
     rows.append(h);
 
     const idle = running.filter((s) => s.status === "idle");

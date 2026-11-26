@@ -282,3 +282,6 @@
 "All" = "Todas";
 "No sessions match" = "Ninguna sesión coincide";
 "Clear" = "Borrar";
+"Stop “%@”?" = "¿Detener «%@»?";
+"The agent is working or waiting for your answer. Stopping ends its process; a saved conversation can be resumed later." = "El agente está trabajando o esperando tu respuesta. Detenerlo termina su proceso; si tiene conversación guardada, se puede reanudar después.";
+"This session or its workers are working or waiting for your answer. Stopping ends them all; saved conversations can be resumed later." = "Esta sesión o sus workers están trabajando o esperando tu respuesta. Detenerla los termina a todos; las conversaciones guardadas se pueden reanudar después.";
