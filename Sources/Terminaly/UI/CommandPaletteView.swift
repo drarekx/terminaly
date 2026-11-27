@@ -25,6 +25,8 @@ struct CommandPaletteView: View {
             all.append(Item(id: "next-attention", title: String(localized: "Next Session Needing Input"), subtitle: String(localized: "Session"),
                             symbol: "bell.badge") { store.focusNextAttention() })
         }
+        all.append(Item(id: "broadcast", title: String(localized: "Send to Sessions…"), subtitle: String(localized: "Session"),
+                        symbol: "paperplane") { BroadcastState.shared.isPresented = true })
         for s in store.sessions where !s.archived {
             let project = store.project(s.projectID)?.name ?? ""
             let ws = store.workspace(of: s.id).map { "\($0.name) › " } ?? ""

@@ -88,6 +88,19 @@ enum Snapshot {
                     store.changesSessionID = nil
                 }
             }
+            if let text = env["TERMINALY_SNAPSHOT_BROADCAST"] {
+                store.selectWorkspace(at: 0)
+                BroadcastState.shared.previewStoppedSessions = true
+                BroadcastState.shared.previewText = text
+                BroadcastState.shared.isPresented = true
+                try? await Task.sleep(for: .seconds(1.5))
+                if let sheet = NSApp.windows.first(where: { $0.isSheet && $0.isVisible }),
+                   let v = sheet.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) {
+                    v.cacheDisplay(in: v.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: url.appendingPathComponent("broadcast.png"))
+                }
+                BroadcastState.shared.isPresented = false
+            }
             renderMenus(to: url.appendingPathComponent("menus.png"))
             if env["TERMINALY_SNAPSHOT_MENUBAR"] != nil { MenuBarItem.renderPreview(to: url.appendingPathComponent("menubar.png")) }
             if env["TERMINALY_SETTINGS_TAB"] != nil {

@@ -317,3 +317,15 @@
 "Open %@" = "Abrir %@";
 "binary" = "binario";
 "from %@" = "antes %@";
+
+/* Send to Sessions (broadcast) */
+"Send to Sessions…" = "Enviar a sesiones…";
+"Send to Sessions" = "Enviar a sesiones";
+"Type @name to pick sessions; mentions are left out of the message." = "Escribe @nombre para elegir sesiones; las menciones no se envían.";
+"No running sessions in this workspace." = "No hay sesiones en marcha en este espacio.";
+"Sent to %lld. Skipped, waiting for permission: %@" = "Enviado a %lld. Omitidas, esperando un permiso: %@";
+"Send to %lld" = "Enviar a %lld";
+"Send (⌘↩)" = "Enviar (⌘↩)";
+"Waiting for permission: skipped" = "Esperando un permiso: se omite";
+"Busy: gets it after its turn" = "Ocupada: lo recibe al acabar su turno";
+"Done" = "Hecho";
