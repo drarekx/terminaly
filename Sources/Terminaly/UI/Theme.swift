@@ -11,6 +11,9 @@ enum Theme {
     static let text = Color(hex: 0xECECF1)
     static let textNS = NSColor(srgbRed: 212 / 255, green: 212 / 255, blue: 220 / 255, alpha: 1)
     static let hairline = Color.white.opacity(0.07)
+    /// Added / removed lines and files in a diff.
+    static let added = Color(hex: 0x3DD68C)
+    static let removed = Color(hex: 0xFF6B6B)
 
     /// Sidebar ground: 20 % of the workspace color over graphite (18, 18, 22).
     static func sidebar(_ color: FolderColor) -> Color {

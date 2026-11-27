@@ -204,6 +204,9 @@ private struct WorkspacePage: View {
             store.split(.horizontal)
             store.show(session.id)
         }
+        if store.canShowChanges(session) {
+            Button("Show Changes…") { store.changesSessionID = session.id }
+        }
         if !store.workers(of: session.id).isEmpty {
             Button("Show Swarm") { store.showSwarm(session.id) }
             if !store.finishedWorkers(of: session.id).isEmpty {
@@ -395,6 +398,9 @@ private struct SessionMenu: View {
             MenuRow(title: "Open in Split", icon: "rectangle.split.2x1") {
                 store.split(.horizontal)
                 store.show(session.id)
+            }
+            if store.canShowChanges(session) {
+                MenuRow(title: "Show Changes…", icon: "plusminus") { store.changesSessionID = session.id }
             }
             if ClaudeMCP.isClaude(session.command) {
                 MCPMenuSection(session: session)

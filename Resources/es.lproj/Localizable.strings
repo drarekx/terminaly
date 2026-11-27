@@ -299,3 +299,21 @@
 "MCP servers" = "Servidores MCP";
 "No MCP servers set up for every project." = "No hay servidores MCP instalados para todos los proyectos.";
 "Each server is a separate process in every Claude Code session, often 100–300 MB. One switched off here stays installed but starts off in every project; turn it on for a project from the session's “…” menu." = "Cada servidor es un proceso aparte en cada sesión de Claude Code, a menudo de 100–300 MB. Uno apagado aquí sigue instalado pero arranca apagado en todos los proyectos; actívalo en un proyecto desde el menú «…» de la sesión.";
+
+/* Show Changes */
+"Show Changes…" = "Ver cambios…";
+"Changes in “%@”" = "Cambios en «%@»";
+"Close" = "Cerrar";
+"Refresh" = "Actualizar";
+"Could not read the changes" = "No se pudieron leer los cambios";
+"The session has no folder." = "La sesión no tiene carpeta.";
+"No changes" = "Sin cambios";
+"The folder matches its last commit." = "La carpeta coincide con su último commit.";
+"Reading changes…" = "Leyendo cambios…";
+"Uncommitted (%lld)" = "Sin commit (%lld)";
+"%lld files" = "%lld archivos";
+"Commits on %@ not in %@ (%lld)" = "Commits en %@ que no están en %@ (%lld)";
+"Deleted" = "Eliminado";
+"Open %@" = "Abrir %@";
+"binary" = "binario";
+"from %@" = "antes %@";

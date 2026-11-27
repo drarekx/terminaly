@@ -26,6 +26,8 @@ final class AppStore {
     var gitProjects: Set<UUID> = []
     /// Project whose "New Session in Worktree" sheet is open.
     var worktreeRequestProjectID: UUID?
+    /// Session whose "Show Changes" sheet is open.
+    var changesSessionID: UUID?
     /// Layout each workspace had before Show Swarm replaced it; runtime only.
     var layoutsBeforeSwarm: [UUID: PaneNode] = [:]
     /// Times a request ran out against a hung host; the self-test reads it instead of an alert.
