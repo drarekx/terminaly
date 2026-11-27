@@ -488,6 +488,7 @@ struct MCPMenuSection: View {
     private func load() {
         guard let dir = store.workingDirectory(for: session) else { return }
         Task.detached {
+            ClaudeMCP.applyDefaults(for: dir)
             let found = ClaudeMCP.servers(for: dir)
             await MainActor.run { servers = found }
         }

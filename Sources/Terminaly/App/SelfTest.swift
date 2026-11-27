@@ -502,6 +502,17 @@ enum SelfTest {
         var refused = false
         do { try ClaudeMCP.setEnabled("alpha", false, for: project.path, paths: paths) } catch { refused = true }
         checks.append(refused && state().first == "alpha=1")
+        try? fm.removeItem(atPath: paths.stateFile.path + ".lock")
+        // Off by default: switched off once per project, then the project's own choice stands.
+        let defaults = base.appendingPathComponent("mcp-defaults.json")
+        try? ClaudeMCP.setOffByDefault("alpha", true, defaults: defaults)
+        let listed = ClaudeMCP.globalServers(paths: paths, defaults: defaults).map { "\($0.name)=\($0.enabled ? 1 : 0)" }
+        checks.append(listed == ["alpha=0", "beta=1", "plugin:tool:probe=1"])
+        ClaudeMCP.applyDefaults(for: project.path, paths: paths, defaults: defaults)
+        checks.append(state().first == "alpha=0")
+        try? ClaudeMCP.setEnabled("alpha", true, for: project.path, paths: paths)
+        ClaudeMCP.applyDefaults(for: project.path, paths: paths, defaults: defaults)
+        checks.append(state().first == "alpha=1")
         print("0 mcp servers: \(checks.map { $0 ? "ok" : "FAIL" })")
         return !checks.contains(false)
     }

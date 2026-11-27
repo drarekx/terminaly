@@ -58,6 +58,8 @@ private struct IntegrationsSettings: View {
     @State private var skill = SwarmSkillInstaller.state()
     @State private var skillError: String?
     @State private var maxWorkers = DaemonConfig.load().maxWorkers ?? DaemonConfig.defaultMaxWorkers
+    @State private var mcpServers: [ClaudeMCP.Server] = []
+    @State private var mcpError: String?
 
     var body: some View {
         Form {
@@ -78,6 +80,23 @@ private struct IntegrationsSettings: View {
                 }
                 if let error { Text(error).foregroundStyle(.red).font(.caption) }
             }
+            Section("MCP servers") {
+                if mcpServers.isEmpty {
+                    Text("No MCP servers set up for every project.").foregroundStyle(.secondary)
+                }
+                ForEach(mcpServers) { server in
+                    Toggle(isOn: Binding(get: { server.enabled }, set: { setMCPDefault(server, on: $0) })) {
+                        Text(verbatim: server.label)
+                        if case .plugin(let plugin) = server.source {
+                            Text("Plugin \(plugin)").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Text("Each server is a separate process in every Claude Code session, often 100–300 MB. One switched off here stays installed but starts off in every project; turn it on for a project from the session's “…” menu.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let mcpError { Text(mcpError).foregroundStyle(.red).font(.caption) }
+            }
+            .task { mcpServers = await Task.detached { ClaudeMCP.globalServers() }.value }
             Section("Codex") {
                 LabeledContent("Status hooks") {
                     Text(codex ? LocalizedStringKey("Installed") : LocalizedStringKey("Not installed"))
@@ -178,6 +197,16 @@ private struct IntegrationsSettings: View {
             openCodeError = error.localizedDescription
         }
         openCode = OpenCodePluginInstaller.state()
+    }
+
+    private func setMCPDefault(_ server: ClaudeMCP.Server, on: Bool) {
+        do {
+            try ClaudeMCP.setOffByDefault(server.name, !on)
+            mcpError = nil
+        } catch {
+            mcpError = error.localizedDescription
+        }
+        mcpServers = ClaudeMCP.globalServers()
     }
 
     private func runSkill(_ op: () throws -> Void) {

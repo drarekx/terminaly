@@ -311,6 +311,8 @@ final class AppStore {
         guard let s = session(id), let cwd = workingDirectory(for: s) else { return false }
         terminals.stop(id)
         update(id) { $0.status = .starting; $0.exitCode = nil; $0.permissionPending = false }
+        // Before the agent reads its settings. Short wait: this is the main thread.
+        if ClaudeMCP.isClaude(command ?? s.command) { ClaudeMCP.applyDefaults(for: cwd, wait: 0.3) }
         terminals.start(s, cwd: cwd, command: command)
         return true
     }

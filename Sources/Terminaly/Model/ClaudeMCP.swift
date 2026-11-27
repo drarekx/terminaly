@@ -85,16 +85,21 @@ enum ClaudeMCP {
 
     /// Takes effect in sessions started afterwards: a running agent keeps the servers it has.
     static func setEnabled(_ name: String, _ enabled: Bool, for directory: String, paths: Paths = .standard) throws {
-        let root = projectRoot(of: directory)
-        try locked(paths.stateFile) {
+        try editDisabled(root: projectRoot(of: directory), paths: paths, wait: 3) { disabled in
+            disabled.removeAll { $0 == name }
+            if !enabled { disabled.append(name) }
+        }
+    }
+
+    private static func editDisabled(root: String, paths: Paths, wait: TimeInterval, _ edit: (inout [String]) -> Void) throws {
+        try locked(paths.stateFile, wait: wait) {
             guard let data = try? Data(contentsOf: paths.stateFile),
                   var state = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw Failure.invalid }
             let key = projectKey(root, in: state)
             var projects = state["projects"] as? [String: Any] ?? [:]
             var project = projects[key] as? [String: Any] ?? [:]
             var disabled = project["disabledMcpServers"] as? [String] ?? []
-            disabled.removeAll { $0 == name }
-            if !enabled { disabled.append(name) }
+            edit(&disabled)
             project["disabledMcpServers"] = disabled
             projects[key] = project
             state["projects"] = projects
@@ -106,6 +111,80 @@ enum ClaudeMCP {
                 try? FileManager.default.setAttributes([.posixPermissions: mode], ofItemAtPath: paths.stateFile.path)
             }
         }
+    }
+
+    // MARK: Off by default
+
+    /// Claude Code has no "installed but off" state: a server set up for every project runs in
+    /// every project until that project switches it off. Terminaly keeps the list of servers that
+    /// should start switched off and applies it once per project, before the project's first
+    /// Claude session and before listing its servers. After that the project's own switch stands.
+    struct Defaults: Codable, Equatable {
+        var off: [String] = []
+        /// Per project root, the servers already switched off there once.
+        var applied: [String: [String]] = [:]
+
+        static var url: URL { TerminalyPaths.stateDir.appendingPathComponent("mcp-defaults.json") }
+
+        static func load(from url: URL = url) -> Defaults {
+            guard let data = try? Data(contentsOf: url),
+                  let value = try? JSONDecoder().decode(Defaults.self, from: data) else { return Defaults() }
+            return value
+        }
+
+        func save(to url: URL = url) throws {
+            let enc = JSONEncoder()
+            enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try enc.encode(self).write(to: url, options: .atomic)
+        }
+    }
+
+    /// The servers every project gets: the ones that can be made off by default. `enabled` here
+    /// means "on by default".
+    static func globalServers(paths: Paths = .standard, defaults: URL = Defaults.url) -> [Server] {
+        let off = Set(Defaults.load(from: defaults).off)
+        var found: [Server] = serverNames(object(at: paths.stateFile)["mcpServers"]).map {
+            Server(name: $0, label: $0, source: .user, enabled: !off.contains($0))
+        }
+        for (plugin, names) in pluginServers(root: nil, paths: paths) {
+            for name in names {
+                let full = "plugin:\(plugin):\(name)"
+                found.append(Server(name: full, label: name, source: .plugin(plugin), enabled: !off.contains(full)))
+            }
+        }
+        return found.sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+    }
+
+    static func setOffByDefault(_ name: String, _ off: Bool, defaults url: URL = Defaults.url) throws {
+        var defaults = Defaults.load(from: url)
+        defaults.off.removeAll { $0 == name }
+        if off {
+            defaults.off.append(name)
+        } else {
+            // Forget where it was applied: making it off by default again starts over.
+            defaults.applied = defaults.applied.mapValues { $0.filter { $0 != name } }.filter { !$0.value.isEmpty }
+        }
+        try defaults.save(to: url)
+    }
+
+    /// Switches the off-by-default servers off in the project of `directory`, each one only the
+    /// first time. `wait` is how long to wait for Claude Code's lock: keep it short on the main thread.
+    static func applyDefaults(for directory: String, paths: Paths = .standard, defaults url: URL = Defaults.url, wait: TimeInterval = 3) {
+        var defaults = Defaults.load(from: url)
+        guard !defaults.off.isEmpty else { return }
+        let root = projectRoot(of: directory)
+        let done = defaults.applied[root] ?? []
+        let pending = defaults.off.filter { !done.contains($0) }
+        guard !pending.isEmpty else { return }
+        do {
+            try editDisabled(root: root, paths: paths, wait: wait) { disabled in
+                disabled.append(contentsOf: pending.filter { !disabled.contains($0) })
+            }
+        } catch {
+            return  // not recorded as applied: the next session start tries again
+        }
+        defaults.applied[root] = done + pending
+        try? defaults.save(to: url)
     }
 
     // MARK: Lookup
@@ -132,12 +211,15 @@ enum ClaudeMCP {
     }
 
     /// Servers that ship inside the plugins enabled for this folder.
-    private static func pluginServers(root: String, paths: Paths) -> [(String, [String])] {
+    /// `root` nil: only the plugins enabled for every project.
+    private static func pluginServers(root: String?, paths: Paths) -> [(String, [String])] {
         var enabled: [String: Bool] = [:]
-        let claude = URL(fileURLWithPath: root).appendingPathComponent(".claude")
-        for file in [paths.configDir.appendingPathComponent("settings.json"),
-                     claude.appendingPathComponent("settings.json"),
-                     claude.appendingPathComponent("settings.local.json")] {
+        var files = [paths.configDir.appendingPathComponent("settings.json")]
+        if let root {
+            let claude = URL(fileURLWithPath: root).appendingPathComponent(".claude")
+            files += [claude.appendingPathComponent("settings.json"), claude.appendingPathComponent("settings.local.json")]
+        }
+        for file in files {
             for (id, on) in object(at: file)["enabledPlugins"] as? [String: Any] ?? [:] {
                 if let on = on as? Bool { enabled[id] = on }
             }
@@ -165,9 +247,9 @@ enum ClaudeMCP {
 
     /// Same protocol as Claude Code (the `proper-lockfile` package): a `<file>.lock` folder held
     /// while writing, taken over when its holder has not touched it for 10 s.
-    private static func locked(_ file: URL, _ body: () throws -> Void) throws {
+    private static func locked(_ file: URL, wait: TimeInterval, _ body: () throws -> Void) throws {
         let lock = file.path + ".lock"
-        let deadline = Date().addingTimeInterval(3)
+        let deadline = Date().addingTimeInterval(wait)
         while mkdir(lock, 0o755) != 0 {
             guard errno == EEXIST else { throw Failure.busy }
             let touched = (try? FileManager.default.attributesOfItem(atPath: lock))?[.modificationDate] as? Date
