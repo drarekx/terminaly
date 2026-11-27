@@ -620,6 +620,14 @@ struct SessionRow: View {
                         .foregroundStyle(session.status.text)
                         .lineLimit(1)
                 }
+                if session.status == .working, let activity = session.activity {
+                    Text(verbatim: activity)
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.tertiaryText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(Text(verbatim: activity))
+                }
                 if !workers.isEmpty {
                     Button(action: toggleWorkers) {
                         HStack(spacing: 4) {

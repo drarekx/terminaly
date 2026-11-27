@@ -102,6 +102,8 @@ struct Session: Identifiable, Codable, Hashable {
     /// The agent is showing a permission dialog; Allow/Deny can answer it.
     var permissionPending = false
     var attentionDetail: String?
+    /// What a working agent is doing right now ("Bash: npm test"), from its tool hooks.
+    var activity: String?
 
     enum CodingKeys: String, CodingKey {
         case id, projectID, title, command, symbol, createdAt, archived, pinned, userTitled, agentSessionID,
