@@ -283,7 +283,11 @@ final class HostedSession {
         hookSeq += 1
         turnOutput.removeAll()
         quietTimer?.cancel()
+        let previousID = agentSessionID
         if let sid = payload["session_id"] as? String, !sid.isEmpty { agentSessionID = sid }
+        // `/clear` and `/new` start a new conversation without changing the status: the new id must
+        // still reach the app, or resume would bring back the old conversation.
+        defer { if agentSessionID != previousID && previousID != nil { onStatus?(self, detail, false) } }
         switch event {
         case "UserPromptSubmit", "PreToolUse", "PostToolUse":
             permissionPending = false

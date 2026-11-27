@@ -99,6 +99,21 @@ enum SelfTest {
         print("5 permission: pending=\(pending) answered=\(answered) resume=\(resumeOK) sanitized=\(sanitized)")
         guard pending && answered && resumeOK && sanitized else { return finish(false, "permission") }
 
+        // 5b. Clear Context: the command arrives as a line (text, then Enter), and the new conversation
+        // id the agent reports while staying idle reaches the app, so resume uses it.
+        let startHook = ClaudeHookInstaller.command(for: "SessionStart")
+        let clearCmd = "echo '{\"session_id\":\"conv-1\"}' | ( \(startHook) ); read -r line; echo GOT-$line-END; "
+            + "echo '{\"session_id\":\"conv-2\"}' | ( \(startHook) ); sleep 30"
+        guard let cc = store.newSession(preset: Preset(label: "Clear", command: clearCmd), in: project) else { return finish(false, "create") }
+        let firstID = await waitUntil(5) { store.session(cc.id)?.status == .idle && store.session(cc.id)?.agentSessionID == "conv-1" }
+        store.terminals.sendLine(cc.id, "/clear")
+        let cleared = await waitUntil(5) {
+            (store.terminals.view(for: cc.id)?.screenText().contains("GOT-/clear-END") ?? false)
+                && store.session(cc.id)?.agentSessionID == "conv-2"
+        }
+        print("5b clear context: firstID=\(firstID) newID=\(cleared)")
+        store.stop(cc.id)
+        guard firstID && cleared else { return finish(false, "clear context") }
 
         // 6. Switching sessions in one pane shows exactly the selected terminal, on top
         _ = store.addWorkspace(name: "Switch")
@@ -489,6 +504,10 @@ enum SelfTest {
             order([a, collapsed, w1, w2]) == ["A", "B"],
             // A pinned worker stays under its parent even when the parent is not pinned.
             order([a, b, w2]) == ["A", "B", "-W2"],
+            AgentClear.command(for: "claude --model opus") == "/clear",
+            AgentClear.command(for: "codex") == "/new",
+            AgentClear.command(for: "opencode") == "/new",
+            AgentClear.command(for: "") == nil && AgentClear.command(for: "npm run dev") == nil,
         ]
         print("0 pinned order / clear: \(checks.map { $0 ? "ok" : "FAIL" })")
         return !checks.contains(false)

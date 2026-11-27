@@ -202,6 +202,10 @@ private struct WorkspacePage: View {
         } else {
             Button("Pin to Top") { store.togglePinned(session.id) }
         }
+        if store.offersClearContext(session) {
+            Button("Clear Context") { store.confirmClearContext(session.id) }
+                .disabled(!store.canClearContext(session))
+        }
         Divider()
         Button("Split Right With This") {
             store.split(.horizontal)
@@ -394,6 +398,10 @@ private struct SessionMenu: View {
                 MenuRow(title: "Unpin", icon: "pin.slash") { store.togglePinned(session.id) }
             } else {
                 MenuRow(title: "Pin to Top", icon: "pin") { store.togglePinned(session.id) }
+            }
+            if store.offersClearContext(session) {
+                MenuRow(title: "Clear Context", icon: "eraser") { store.confirmClearContext(session.id) }
+                    .disabled(!store.canClearContext(session))
             }
             if session.resumeCommand != nil && !store.terminals.isRunning(session.id) {
                 MenuRow(title: "Resume Conversation", icon: "arrow.uturn.forward") { store.resume(session.id) }

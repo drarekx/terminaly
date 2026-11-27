@@ -303,3 +303,6 @@
 /* Pin sessions and Clear Context */
 "Pin to Top" = "Fijar arriba";
 "Pinned" = "Fijada";
+"Clear Context" = "Limpiar contexto";
+"Clear the context of “%@”?" = "¿Limpiar el contexto de «%@»?";
+"The agent is working. Clearing starts a new conversation and its current work may be lost; the previous conversation can no longer be resumed from Terminaly." = "El agente está trabajando. Limpiar empieza una conversación nueva y puede perderse lo que está haciendo; la conversación anterior ya no se podrá reanudar desde Terminaly.";

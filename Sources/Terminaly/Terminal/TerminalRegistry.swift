@@ -251,6 +251,16 @@ final class TerminalRegistry {
         client.request(Message(type: paused ? "pause" : "continue", id: id))
     }
 
+    /// Types text into the session, then Enter 100 ms later in the host (`tly send --enter`):
+    /// agent TUIs take both arriving together as a paste, where Enter is a newline.
+    func sendLine(_ id: UUID, _ text: String) {
+        guard running.contains(id) else { return }
+        var m = Message(type: "send", id: id)
+        m.text = text
+        m.enter = true
+        client.request(m)
+    }
+
     func stopAll() {
         for id in Array(running) { stop(id) }
     }

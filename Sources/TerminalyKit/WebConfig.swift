@@ -64,3 +64,15 @@ public enum AgentResume {
         }
     }
 }
+
+/// The agent's own command to start a fresh conversation in the same process.
+public enum AgentClear {
+    /// `/clear` for Claude, `/new` for Codex and opencode; nil for shells and unknown commands.
+    public static func command(for command: String) -> String? {
+        switch command.split(separator: " ").first {
+        case "claude": return "/clear"
+        case "codex", "opencode": return "/new"
+        default: return nil
+        }
+    }
+}
