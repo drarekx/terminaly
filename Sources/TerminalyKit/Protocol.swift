@@ -142,10 +142,12 @@ public struct SessionInfo: Codable, Hashable {
     public var projectPath: String?
     public var branch: String?
     public var turns: Int?
+    /// Same as the `detail` of the last status event: what a working agent is doing, or why it needs input.
+    public var detail: String?
 
     public init(id: UUID, command: String, cwd: String, pid: Int32, running: Bool, status: String, exitCode: Int32?, createdAt: Date,
                 permission: Bool? = nil, agentSessionID: String? = nil, parent: UUID? = nil, title: String? = nil,
-                projectPath: String? = nil, branch: String? = nil, turns: Int? = nil) {
+                projectPath: String? = nil, branch: String? = nil, turns: Int? = nil, detail: String? = nil) {
         self.id = id
         self.command = command
         self.cwd = cwd
@@ -161,6 +163,7 @@ public struct SessionInfo: Codable, Hashable {
         self.projectPath = projectPath
         self.branch = branch
         self.turns = turns
+        self.detail = detail
     }
 }
 
