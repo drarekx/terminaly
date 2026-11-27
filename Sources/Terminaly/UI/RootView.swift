@@ -49,6 +49,14 @@ struct RootView: View {
                 WorktreeSheet(project: p).environment(store)
             }
         }
+        .sheet(isPresented: Binding(
+            get: { store.changesSessionID != nil },
+            set: { if !$0 { store.changesSessionID = nil } }
+        )) {
+            if let s = store.session(store.changesSessionID) {
+                ChangesView(session: s).environment(store)
+            }
+        }
         .onChange(of: store.renamingSessionID) { _, id in
             renameText = store.session(id)?.title ?? ""
         }

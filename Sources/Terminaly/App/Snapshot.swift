@@ -72,6 +72,20 @@ enum Snapshot {
                     store.worktreeRequestProjectID = nil
                 }
             }
+            if env["TERMINALY_SNAPSHOT_CHANGES"] != nil {
+                store.selectWorkspace(at: 0)
+                try? await Task.sleep(for: .seconds(1))
+                if let s = store.sessions.first(where: { !$0.archived && store.canShowChanges($0) }) {
+                    store.changesSessionID = s.id
+                    try? await Task.sleep(for: .seconds(2))
+                    if let sheet = NSApp.windows.first(where: { $0.isSheet && $0.isVisible }),
+                       let v = sheet.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) {
+                        v.cacheDisplay(in: v.bounds, to: rep)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: url.appendingPathComponent("changes.png"))
+                    }
+                    store.changesSessionID = nil
+                }
+            }
             renderMenus(to: url.appendingPathComponent("menus.png"))
             if env["TERMINALY_SNAPSHOT_MENUBAR"] != nil { MenuBarItem.renderPreview(to: url.appendingPathComponent("menubar.png")) }
             if env["TERMINALY_SETTINGS_TAB"] != nil {

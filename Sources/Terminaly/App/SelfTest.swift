@@ -28,6 +28,7 @@ enum SelfTest {
         if !workspaceChecks(store) { return }
         if !filterChecks() { return finish(false, "sidebar filter") }
         if !mcpChecks() { return finish(false, "mcp servers") }
+        if !changesChecks() { return finish(false, "show changes") }
 
         let project = store.addProject(at: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
         if let ws = store.selectedWorkspaceID { store.moveProject(project.id, to: ws) }
@@ -514,6 +515,56 @@ enum SelfTest {
         ClaudeMCP.applyDefaults(for: project.path, paths: paths, defaults: defaults)
         checks.append(state().first == "alpha=1")
         print("0 mcp servers: \(checks.map { $0 ? "ok" : "FAIL" })")
+        return !checks.contains(false)
+    }
+
+    /// "Show Changes": git output parsing with literal samples, then a throwaway repo with a branch.
+    private static func changesChecks() -> Bool {
+        let status = GitChanges.parseStatus(" M Sources/a.swift\0A  new.txt\0R  b2.swift\0b.swift\0?? notes/todo.md\0 D gone.txt\0UU clash.swift\0")
+        let numstat = GitChanges.parseNumstat("3\t1\tSources/a.swift\0-\t-\tlogo.png\05\t0\t\0b.swift\0b2.swift\0")
+        var checks = [
+            status.map { "\($0.status) \($0.path)\($0.oldPath.map { " <" + $0 } ?? "")" }
+                == ["M Sources/a.swift", "A new.txt", "R b2.swift <b.swift", "? notes/todo.md", "D gone.txt", "U clash.swift"],
+            numstat["Sources/a.swift"]?.added == 3 && numstat["Sources/a.swift"]?.removed == 1,
+            numstat["logo.png"].map { $0.added == nil && $0.removed == nil } == true,
+            numstat["b2.swift"]?.added == 5 && numstat.count == 3,
+            GitChanges.parseLog("abc1234 Add thing\ndef5678 Fix: other one\n").map { "\($0.sha)|\($0.subject)" }
+                == ["abc1234|Add thing", "def5678|Fix: other one"],
+            GitChanges.parseShortstat(" 3 files changed, 10 insertions(+), 2 deletions(-)\n") == .init(files: 3, insertions: 10, deletions: 2),
+            GitChanges.parseShortstat(" 1 file changed, 1 deletion(-)") == .init(files: 1, insertions: 0, deletions: 1),
+            GitChanges.parseShortstat("") == nil,
+        ]
+        let fm = FileManager.default
+        let repo = fm.temporaryDirectory.appendingPathComponent("tly-changes-\(UUID().uuidString)").resolvingSymlinksInPath()
+        defer {
+            try? fm.removeItem(at: repo)
+            try? fm.removeItem(atPath: Git.worktreePath(repo: repo.path, branch: "work"))
+            try? fm.removeItem(atPath: repo.path + ".worktrees")
+        }
+        do {
+            try fm.createDirectory(at: repo, withIntermediateDirectories: true)
+            let id = ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+            try Git.runSync(["init", "-q", "-b", "main"], in: repo.path)
+            try "a\nb\n".write(to: repo.appendingPathComponent("a.txt"), atomically: true, encoding: .utf8)
+            try Git.runSync(["add", "."], in: repo.path)
+            try Git.runSync(id + ["commit", "-q", "-m", "init"], in: repo.path)
+            let wt = try Git.addWorktreeSync(repo: repo.path, branch: "work")
+            try "x\n".write(to: URL(fileURLWithPath: wt).appendingPathComponent("b.txt"), atomically: true, encoding: .utf8)
+            try Git.runSync(["add", "."], in: wt)
+            try Git.runSync(id + ["commit", "-q", "-m", "Add b"], in: wt)
+            try "a\nc\nd\n".write(to: URL(fileURLWithPath: wt).appendingPathComponent("a.txt"), atomically: true, encoding: .utf8)
+            try "1\n2\n3".write(to: URL(fileURLWithPath: wt).appendingPathComponent("new.txt"), atomically: true, encoding: .utf8)
+            let c = try GitChanges.load(directory: wt, branch: "work", isWorktree: true)
+            checks.append(c.files.map { "\($0.status) \($0.path) +\($0.added ?? -1) -\($0.removed ?? -1)" }
+                == ["M a.txt +2 -1", "? new.txt +3 -0"])
+            checks.append(c.base == "main" && c.commits.map(\.subject) == ["Add b"]
+                && c.branchStat == .init(files: 1, insertions: 1, deletions: 0))
+            checks.append(try GitChanges.load(directory: repo.path, branch: nil, isWorktree: false).isEmpty)
+        } catch {
+            print("0 show changes: \(error.localizedDescription)")
+            checks.append(false)
+        }
+        print("0 show changes: \(checks.map { $0 ? "ok" : "FAIL" })")
         return !checks.contains(false)
     }
 
