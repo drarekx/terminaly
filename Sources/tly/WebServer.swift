@@ -378,7 +378,9 @@ final class WebBridge {
                 }
                 return item
             }
-            self?.queue.async { self?.sendJSON(reply) }
+            let message = reply
+            guard let self else { return }
+            self.queue.async { self.sendJSON(message) }
         }
     }
 
