@@ -513,6 +513,7 @@ final class AppStore {
             if status == .exited { $0.exitCode = exitCode }
             $0.permissionPending = status == .needsInput && permission
             $0.attentionDetail = status == .needsInput ? detail : nil
+            $0.activity = status == .working ? detail : nil
             if let agentSessionID { $0.agentSessionID = agentSessionID }
         }
         if agentSessionID != nil && agentSessionID != old.agentSessionID { scheduleSave() }

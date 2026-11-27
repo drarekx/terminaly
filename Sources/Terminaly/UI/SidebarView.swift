@@ -629,6 +629,8 @@ struct SessionRow: View {
                         .font(Theme.Font.caption)
                         .foregroundStyle(session.status.text)
                         .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help(Text(verbatim: statusLine))
                 }
                 if !workers.isEmpty {
                     Button(action: toggleWorkers) {
@@ -680,6 +682,9 @@ struct SessionRow: View {
             return session.status.label
         case .starting:
             return String(localized: "Starting…")
+        case .working where session.activity != nil:
+            // What it is doing says more than how long: one line, so the row keeps its height.
+            return "\(session.status.label) · \(session.activity!)"
         default:
             return "\(session.status.label) · \(Self.age(session.statusChangedAt))"
         }

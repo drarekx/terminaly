@@ -217,7 +217,8 @@ final class TerminalRegistry {
         client.request(Message(type: "attach", id: id)) { [weak self] reply in
             guard let self, reply.error == nil else { return }
             if let info = reply.sessions?.first {
-                self.store?.applyStatus(id, status: info.status, detail: nil, notify: false, exitCode: info.exitCode,
+                self.store?.applyStatus(id, status: info.status, detail: info.status == "working" ? info.detail : nil,
+                                        notify: false, exitCode: info.exitCode,
                                         permission: info.permission ?? false, agentSessionID: info.agentSessionID)
             }
             // Nudge the size so full-screen programs repaint after the replay.

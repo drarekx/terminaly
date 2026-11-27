@@ -344,6 +344,7 @@
         const s = live.get(msg.id);
         if (!s) break;
         s.status = msg.status;
+        s.detail = msg.detail;
         s.permission = msg.permission || false;
         if (msg.exitCode != null) s.exitCode = msg.exitCode;
         if (msg.status === "exited") {
@@ -386,6 +387,8 @@
       id, title, running,
       status: running ? info.status : "stopped",
       permission: running && !!info.permission,
+      // What a working agent is doing ("Bash: npm test"), from its tool hooks.
+      activity: running && info.status === "working" ? info.detail || null : null,
       projectID: meta?.projectID || null,
       // The session that started this one; the daemon knows before the app has saved it.
       parentID: meta?.parentID || info?.parent || null,
@@ -637,7 +640,8 @@
     dot.dataset.status = v.running ? v.status : "exited";
     const text = el("span", "row-text");
     text.append(el("span", "row-title", v.title));
-    const sub = el("span", "row-sub", t(v.status));
+    const sub = el("span", "row-sub", v.activity ? `${t(v.status)} · ${v.activity}` : t(v.status));
+    if (v.activity) sub.title = v.activity;
     sub.dataset.status = v.status;
     text.append(sub);
     if (workers.length) {

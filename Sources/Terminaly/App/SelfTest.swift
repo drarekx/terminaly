@@ -30,6 +30,7 @@ enum SelfTest {
         if !broadcastChecks() { return finish(false, "broadcast mentions") }
         if !mcpChecks() { return finish(false, "mcp servers") }
         if !changesChecks() { return finish(false, "show changes") }
+        if !toolActivityChecks() { return finish(false, "tool activity") }
 
         let project = store.addProject(at: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
         if let ws = store.selectedWorkspaceID { store.moveProject(project.id, to: ws) }
@@ -44,6 +45,19 @@ enum SelfTest {
         }
         print("1 hook: status=\(store.session(a.id)?.status.rawValue ?? "nil") ok=\(hookOK)")
         guard hookOK else { return finish(false, "hook path") }
+
+        // 1b. PreToolUse: the session shows what tool it is running, and PostToolUse keeps it
+        let pre = ClaudeHookInstaller.command(for: "PreToolUse"), post = ClaudeHookInstaller.command(for: "PostToolUse")
+        let toolJSON = #"{"tool_name":"Bash","tool_input":{"command":"npm test\necho more"}}"#
+        let toolCmd = "printf '%s' '\(toolJSON)' | ( \(pre) ); echo '{}' | ( \(post) ); read -r x"
+        guard let tool = store.newSession(preset: Preset(label: "Tool", command: toolCmd), in: project) else { return finish(false, "create") }
+        let showsTool = { store.session(tool.id)?.status == .working && store.session(tool.id)?.activity == "Bash: npm test" }
+        var toolOK = await waitUntil(5, showsTool)
+        _ = await waitUntil(0.5) { false }  // let PostToolUse arrive
+        toolOK = toolOK && showsTool()
+        print("1b tool activity: activity=\(store.session(tool.id)?.activity ?? "nil") ok=\(toolOK)")
+        store.deleteSession(tool.id)
+        guard toolOK else { return finish(false, "tool activity") }
 
         // 2. Output heuristic
         guard let b = store.newSession(preset: Preset(label: "Loop", command: "for i in 1 2 3 4 5 6; do echo tick $i; sleep 0.3; done"), in: project) else { return finish(false, "create") }
@@ -445,6 +459,26 @@ enum SelfTest {
     }
 
     /// Sidebar filter: text in name/project/branch, status, parents and workers kept together.
+    /// One-line summaries of PreToolUse hooks.
+    private static func toolActivityChecks() -> Bool {
+        let long = String(repeating: "x", count: 80)
+        let cases: [(String?, [String: Any]?, String?)] = [
+            ("Edit", ["file_path": "/repo/Sources/AppStore.swift", "old_string": "a"], "Edit AppStore.swift"),
+            ("Bash", ["command": "npm test\nnpm run lint", "description": "Run tests"], "Bash: npm test"),
+            ("Grep", ["pattern": "foo", "path": "/repo/Sources"], "Grep: foo"),
+            ("WebFetch", ["url": "https://example.com", "prompt": "Summary"], "WebFetch: https://example.com"),
+            ("Task", ["description": "Find callers", "prompt": "Long prompt"], "Task: Find callers"),
+            ("mcp__github__create_issue", ["title": "Bug"], "create_issue"),
+            ("Bash", ["command": long], "Bash: " + String(long.prefix(59)) + "…"),
+            ("shell", ["command": ["bash", "-lc", "cargo build"]], "shell: cargo build"),
+            ("TodoWrite", nil, "TodoWrite"),
+            (nil, ["command": "ls"], nil),
+        ]
+        let checks = cases.map { ToolActivity.summary(toolName: $0.0, input: $0.1) == $0.2 }
+        print("0 tool activity: \(checks.map { $0 ? "ok" : "FAIL" })")
+        return !checks.contains(false)
+    }
+
     private static func filterChecks() -> Bool {
         let pid = UUID()
         func s(_ title: String, _ status: SessionStatus, branch: String? = nil) -> Session {

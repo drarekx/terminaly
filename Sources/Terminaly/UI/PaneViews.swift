@@ -83,6 +83,15 @@ struct PaneView: View {
                         .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.06)))
                         .lineLimit(1)
                 }
+                if s.status == .working, let activity = s.activity {
+                    Text(verbatim: activity)
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.tertiaryText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .layoutPriority(-1)
+                        .help(Text(verbatim: activity))
+                }
                 Spacer()
                 if s.status == .needsInput {
                     Text("Needs input")

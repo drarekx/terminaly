@@ -29,6 +29,8 @@ final class HostedSession {
     private(set) var paused = false
     private var statusBeforePause = "idle"
     private var detailBeforePause: String?
+    /// What the agent is doing in its turn ("Bash: npm test"), from the last PreToolUse.
+    private var toolActivity: String?
     private var master: Int32 = -1
     private var readSource: DispatchSourceRead?
     private var writeSource: DispatchSourceWrite?
@@ -62,7 +64,7 @@ final class HostedSession {
         SessionInfo(id: id, command: command, cwd: cwd, pid: pid, running: running,
                     status: status, exitCode: exitCode, createdAt: createdAt,
                     permission: permissionPending, agentSessionID: agentSessionID, parent: parent, title: title,
-                    projectPath: projectPath, branch: branch, turns: turns)
+                    projectPath: projectPath, branch: branch, turns: turns, detail: detail)
     }
 
     var replay: [UInt8] { ring.contents }
@@ -236,7 +238,7 @@ final class HostedSession {
         guard running, !paused else { return }
         paused = true
         statusBeforePause = status == "working" ? "idle" : status
-        detailBeforePause = detail
+        detailBeforePause = status == "working" ? nil : detail
         quietTimer?.cancel()
         signalTree(SIGSTOP)
         setStatus("paused")
@@ -285,9 +287,18 @@ final class HostedSession {
         quietTimer?.cancel()
         if let sid = payload["session_id"] as? String, !sid.isEmpty { agentSessionID = sid }
         switch event {
-        case "UserPromptSubmit", "PreToolUse", "PostToolUse":
+        case "UserPromptSubmit":
             permissionPending = false
+            toolActivity = nil
             setStatus("working")
+        case "PreToolUse", "PostToolUse":
+            permissionPending = false
+            // PostToolUse keeps what PreToolUse said: the agent is still on that step until the next one.
+            if event == "PreToolUse" {
+                toolActivity = ToolActivity.summary(toolName: payload["tool_name"] as? String,
+                                                    input: payload["tool_input"] as? [String: Any])
+            }
+            setStatus("working", detail: toolActivity)
         case "PermissionRequest":
             permissionPending = true
             let tool = payload["tool_name"] as? String
@@ -359,8 +370,12 @@ final class HostedSession {
 
     private func setStatus(_ new: String, detail: String? = nil, quiet: Bool = false, force: Bool = false) {
         let old = status
+        let oldDetail = self.detail
         self.detail = detail
-        if old == new && new != "needsInput" && !force { return }
+        // Kept through a permission dialog: PostToolUse brings it back once answered.
+        if new == "idle" || new == "exited" { toolActivity = nil }
+        // A new tool step is news even while the status stays "working"; the same one again is not.
+        if old == new && new != "needsInput" && !force && detail == oldDetail { return }
         status = new
         // Notifications only for hook-driven sessions; output heuristics are too noisy.
         let notify = !quiet && hookDriven && (new == "needsInput" || (new == "idle" && old == "working"))
