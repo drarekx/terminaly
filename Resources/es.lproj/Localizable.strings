@@ -285,3 +285,14 @@
 "Stop “%@”?" = "¿Detener «%@»?";
 "The agent is working or waiting for your answer. Stopping ends its process; a saved conversation can be resumed later." = "El agente está trabajando o esperando tu respuesta. Detenerlo termina su proceso; si tiene conversación guardada, se puede reanudar después.";
 "This session or its workers are working or waiting for your answer. Stopping ends them all; saved conversations can be resumed later." = "Esta sesión o sus workers están trabajando o esperando tu respuesta. Detenerla los termina a todos; las conversaciones guardadas se pueden reanudar después.";
+"MCP Servers" = "Servidores MCP";
+"No MCP servers in this folder." = "No hay servidores MCP en esta carpeta.";
+"Applies when the session restarts." = "Se aplica al reiniciar la sesión.";
+"Applies the next time the session starts." = "Se aplica la próxima vez que arranque la sesión.";
+"Restart to Apply" = "Reiniciar para aplicar";
+"All projects" = "Todos los proyectos";
+"This project" = "Este proyecto";
+"Plugin %@" = "Plugin %@";
+"On" = "Activado";
+"Claude Code is using its settings file. Try again." = "Claude Code está usando su archivo de ajustes. Inténtalo de nuevo.";
+"Claude Code's settings file could not be read." = "No se pudo leer el archivo de ajustes de Claude Code.";

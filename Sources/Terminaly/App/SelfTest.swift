@@ -27,6 +27,7 @@ enum SelfTest {
         // 0. Workspaces: legacy migration (when seeded), per-workspace layouts, moving projects.
         if !workspaceChecks(store) { return }
         if !filterChecks() { return finish(false, "sidebar filter") }
+        if !mcpChecks() { return finish(false, "mcp servers") }
 
         let project = store.addProject(at: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
         if let ws = store.selectedWorkspaceID { store.moveProject(project.id, to: ws) }
@@ -458,6 +459,50 @@ enum SelfTest {
             titles(SessionFilter(query: "zzz")).isEmpty,
         ]
         print("0 sidebar filter: \(checks.map { $0 ? "ok" : "FAIL" })")
+        return !checks.contains(false)
+    }
+
+    /// MCP switches against a made-up Claude Code config: never the real `~/.claude.json`.
+    private static func mcpChecks() -> Bool {
+        let fm = FileManager.default
+        let base = fm.temporaryDirectory.appendingPathComponent("tly-mcp-\(UUID().uuidString)").resolvingSymlinksInPath()
+        defer { try? fm.removeItem(at: base) }
+        let config = base.appendingPathComponent("config"), project = base.appendingPathComponent("project")
+        let plugin = base.appendingPathComponent("plugin")
+        for dir in [config.appendingPathComponent("plugins"), project, plugin] {
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        func write(_ object: [String: Any], _ url: URL) {
+            try? JSONSerialization.data(withJSONObject: object).write(to: url)
+        }
+        let paths = ClaudeMCP.Paths(configDir: config)
+        write(["userID": "keep", "mcpServers": ["alpha": ["command": "true"], "beta": ["command": "true"]],
+               "projects": [project.path: ["mcpServers": ["gamma": ["command": "true"]], "disabledMcpServers": ["beta"]]]],
+              paths.stateFile)
+        try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: paths.stateFile.path)
+        write(["mcpServers": ["delta": ["command": "true"]]], project.appendingPathComponent(".mcp.json"))
+        write(["enabledPlugins": ["tool@market": true, "off@market": false]], config.appendingPathComponent("settings.json"))
+        write(["plugins": ["tool@market": [["installPath": plugin.path]], "off@market": [["installPath": plugin.path]]]],
+              config.appendingPathComponent("plugins/installed_plugins.json"))
+        write(["mcpServers": ["probe": ["command": "true"]]], plugin.appendingPathComponent(".mcp.json"))
+
+        func state() -> [String] {
+            ClaudeMCP.servers(for: project.path, paths: paths).map { "\($0.name)=\($0.enabled ? 1 : 0)" }
+        }
+        var checks = [state() == ["alpha=1", "beta=0", "delta=1", "gamma=1", "plugin:tool:probe=1"]]
+        try? ClaudeMCP.setEnabled("plugin:tool:probe", false, for: project.path, paths: paths)
+        try? ClaudeMCP.setEnabled("beta", true, for: project.path, paths: paths)
+        checks.append(state() == ["alpha=1", "beta=1", "delta=1", "gamma=1", "plugin:tool:probe=0"])
+        // The rest of the file and its mode survive, and the lock is released.
+        let saved = (try? JSONSerialization.jsonObject(with: Data(contentsOf: paths.stateFile))) as? [String: Any]
+        let mode = (try? fm.attributesOfItem(atPath: paths.stateFile.path))?[.posixPermissions] as? Int
+        checks.append(saved?["userID"] as? String == "keep" && mode == 0o600 && !fm.fileExists(atPath: paths.stateFile.path + ".lock"))
+        // A lock someone else holds is respected.
+        try? fm.createDirectory(atPath: paths.stateFile.path + ".lock", withIntermediateDirectories: false)
+        var refused = false
+        do { try ClaudeMCP.setEnabled("alpha", false, for: project.path, paths: paths) } catch { refused = true }
+        checks.append(refused && state().first == "alpha=1")
+        print("0 mcp servers: \(checks.map { $0 ? "ok" : "FAIL" })")
         return !checks.contains(false)
     }
 

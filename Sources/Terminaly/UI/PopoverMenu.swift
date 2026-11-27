@@ -49,11 +49,16 @@ struct MenuRow: View {
     var shortcut: String? = nil
     var destructive = false
     var checked = false
+    /// SF Symbol at the trailing edge, e.g. the chevron of a row that unfolds more rows.
+    var trailingIcon: String? = nil
+    /// False for rows that change something inside the menu (a switch, a section that unfolds).
+    var dismisses = true
     let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button {
+            guard dismisses else { return action() }
             dismiss()
             // Let the popover close first so alerts and panels the action opens aren't nested in it.
             DispatchQueue.main.async(execute: action)
@@ -79,6 +84,9 @@ struct MenuRow: View {
                 }
                 if let shortcut {
                     Text(shortcut).font(Theme.Font.caption).foregroundStyle(Theme.tertiaryText)
+                }
+                if let trailingIcon {
+                    Image(systemName: trailingIcon).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.tertiaryText)
                 }
             }
             .padding(.horizontal, 10)

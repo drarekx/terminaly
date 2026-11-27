@@ -742,6 +742,22 @@ extension AppStore {
         restart(id)
     }
 
+    /// Restarts the agent so it reads its settings again (e.g. which MCP servers to start),
+    /// continuing its conversation when it has one saved.
+    func confirmReload(_ id: UUID) {
+        guard let s = session(id) else { return }
+        guard s.resumeCommand != nil else { return confirmRestart(id) }
+        if isBusy(s) {
+            let alert = NSAlert()
+            alert.messageText = String(localized: "Restart “\(s.title)”?")
+            alert.informativeText = String(localized: "The agent is working or waiting for your answer. Restarting stops it and starts a new process.")
+            alert.addButton(withTitle: String(localized: "Restart"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        resume(id)
+    }
+
     private func isBusy(_ s: Session) -> Bool {
         (s.status == .working || s.status == .needsInput) && terminals.isRunning(s.id)
     }

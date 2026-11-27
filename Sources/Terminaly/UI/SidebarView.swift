@@ -394,6 +394,9 @@ private struct SessionMenu: View {
                 store.split(.horizontal)
                 store.show(session.id)
             }
+            if ClaudeMCP.isClaude(session.command) {
+                MCPMenuSection(session: session)
+            }
             if !store.workers(of: session.id).isEmpty {
                 MenuDivider()
                 MenuRow(title: "Show Swarm", icon: "square.grid.2x2") { store.showSwarm(session.id) }
@@ -412,6 +415,102 @@ private struct SessionMenu: View {
             }
         }
         MenuRow(title: "Delete", icon: "trash", destructive: true) { store.confirmDeleteSession(session.id) }
+    }
+}
+
+/// The MCP servers Claude Code starts in the session's folder, with a switch each. Unfolds inside
+/// the session menu: the list is read from disk only when asked for.
+struct MCPMenuSection: View {
+    @Environment(AppStore.self) private var store
+    let session: Session
+    @State private var open: Bool
+    @State private var servers: [ClaudeMCP.Server]?
+    @State private var changed: Bool
+    @State private var failure: String?
+
+    /// `preview` shows the section unfolded with made-up servers (snapshot mode).
+    init(session: Session, preview: [ClaudeMCP.Server]? = nil) {
+        self.session = session
+        _open = State(initialValue: preview != nil)
+        _servers = State(initialValue: preview)
+        _changed = State(initialValue: preview != nil)
+    }
+
+    var body: some View {
+        MenuRow(title: "MCP Servers", icon: "puzzlepiece.extension",
+                trailingIcon: open ? "chevron.down" : "chevron.right", dismisses: false) {
+            open.toggle()
+            if open { load() }
+        }
+        if open {
+            if let servers {
+                if servers.isEmpty {
+                    note("No MCP servers in this folder.")
+                }
+                ForEach(servers) { server in
+                    MenuRow(title: LocalizedStringKey(server.label), icon: server.enabled ? "checkmark.circle.fill" : "circle",
+                            subtitle: sourceName(server.source), dismisses: false) {
+                        toggle(server)
+                    }
+                    .accessibilityValue(server.enabled ? Text("On") : Text("Off"))
+                }
+            }
+            if let failure {
+                Text(failure).font(Theme.Font.caption).foregroundStyle(Color(hex: 0xFF6B6B))
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+            }
+            if changed {
+                if store.terminals.isRunning(session.id) {
+                    note("Applies when the session restarts.")
+                    MenuRow(title: "Restart to Apply", icon: "arrow.clockwise") { store.confirmReload(session.id) }
+                } else {
+                    note("Applies the next time the session starts.")
+                }
+            }
+            MenuDivider()
+        }
+    }
+
+    private func note(_ text: LocalizedStringKey) -> some View {
+        Text(text).font(Theme.Font.caption).foregroundStyle(Theme.tertiaryText)
+            .padding(.horizontal, 10).padding(.vertical, 4)
+    }
+
+    private func sourceName(_ source: ClaudeMCP.Source) -> String {
+        switch source {
+        case .user: return String(localized: "All projects")
+        case .local: return String(localized: "This project")
+        case .project: return ".mcp.json"
+        case .plugin(let name): return String(localized: "Plugin \(name)")
+        }
+    }
+
+    private func load() {
+        guard let dir = store.workingDirectory(for: session) else { return }
+        Task.detached {
+            let found = ClaudeMCP.servers(for: dir)
+            await MainActor.run { servers = found }
+        }
+    }
+
+    private func toggle(_ server: ClaudeMCP.Server) {
+        guard let dir = store.workingDirectory(for: session) else { return }
+        let enable = !server.enabled
+        Task.detached {
+            let message: String?
+            do {
+                try ClaudeMCP.setEnabled(server.name, enable, for: dir)
+                message = nil
+            } catch {
+                message = error.localizedDescription
+            }
+            let found = ClaudeMCP.servers(for: dir)
+            await MainActor.run {
+                servers = found
+                failure = message
+                if message == nil { changed = true }
+            }
+        }
     }
 }
 

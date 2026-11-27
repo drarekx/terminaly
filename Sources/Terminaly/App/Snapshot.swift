@@ -118,6 +118,17 @@ enum Snapshot {
                 MenuRow(title: "New Workspace", icon: "plus.rectangle.on.rectangle", shortcut: "⇧⌘N") {}
                 MenuRow(title: "Delete Workspace", icon: "trash", destructive: true) {}
             }
+            if let session = store.sessions.first {
+                PopoverMenu(width: 250) {
+                    MenuRow(title: "Restart", icon: "arrow.clockwise") {}
+                    MCPMenuSection(session: session, preview: [
+                        .init(name: "figma", label: "figma", source: .local, enabled: true),
+                        .init(name: "plugin:browser:devtools", label: "devtools", source: .plugin("browser"), enabled: false),
+                        .init(name: "notes", label: "notes", source: .user, enabled: true),
+                    ])
+                    MenuRow(title: "Archive", icon: "archivebox", shortcut: "⇧⌘⌫") {}
+                }
+            }
         }
         .padding(24)
         .background(Theme.elevated)
