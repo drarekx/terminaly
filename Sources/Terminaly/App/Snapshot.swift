@@ -1,5 +1,7 @@
 import AppKit
+import TerminalyKit
 import SwiftUI
+import TerminalyKit
 
 /// Debug aid: `TERMINALY_SNAPSHOT_DIR=/tmp/x Terminaly` renders the main window into PNGs
 /// (one per workspace, max 3) and quits. The app draws its own window, so no screen-recording

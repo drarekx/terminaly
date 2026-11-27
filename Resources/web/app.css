@@ -265,6 +265,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .menu button:hover, .menu button:focus-visible { background: var(--selected); outline: none; }
 .menu .cmd { color: var(--text-3); font: 12px var(--mono); margin-left: 8px; }
+.menu .check { display: inline-block; width: 18px; color: var(--text-2); }
+.menu-note { max-width: 280px; padding: 6px 10px; color: var(--text-3); font-size: 12px; }
 .keys { display: flex; gap: 6px; margin-top: 8px; flex: none; overflow-x: auto; }
 .keys button {
   flex: 1 0 auto; min-width: 44px; height: 40px; padding: 0 10px;

@@ -329,8 +329,56 @@ final class WebBridge {
                 return sendJSON(["type": "started", "error": "unknown project or preset"])
             }
             create(id: UUID(), command: preset.command, cwd: project.path ?? NSHomeDirectory(), cols: cols, rows: rows)
+        case "mcp", "mcpSet":
+            mcp(obj, set: type == "mcpSet")
         default:
             break
+        }
+    }
+
+    /// Lists the MCP servers Claude Code starts in a saved session's folder and, for `mcpSet`,
+    /// switches one for that project. The folder comes from the app's state and the name must be
+    /// one of the listed servers: the page cannot point this at another folder or write other names.
+    private func mcp(_ obj: [String: Any], set: Bool) {
+        let state = AppStateFile.load()
+        let rawID = obj["id"] as? String ?? ""
+        guard let id = UUID(uuidString: rawID), let s = state.sessions?.first(where: { $0.id == id }),
+              ClaudeMCP.isClaude(s.command ?? "") else {
+            return sendJSON(["type": "mcp", "id": rawID, "error": "unknown"])
+        }
+        let cwd = s.worktreePath ?? state.project(s.projectID)?.path ?? NSHomeDirectory()
+        let name = obj["name"] as? String, enabled = obj["enabled"] as? Bool
+        // Reads Claude Code's state, runs git and may wait for its lock: not on the connection's queue.
+        DispatchQueue.global().async { [weak self] in
+            ClaudeMCP.applyDefaults(for: cwd)
+            var reply: [String: Any] = ["type": "mcp", "id": rawID]
+            if set {
+                if let name, let enabled, ClaudeMCP.servers(for: cwd).contains(where: { $0.name == name }) {
+                    do {
+                        try ClaudeMCP.setEnabled(name, enabled, for: cwd)
+                        reply["changed"] = true
+                    } catch ClaudeMCP.Failure.busy {
+                        reply["error"] = "busy"
+                    } catch {
+                        reply["error"] = "invalid"
+                    }
+                } else {
+                    reply["error"] = "unknown"
+                }
+            }
+            reply["servers"] = ClaudeMCP.servers(for: cwd).map { server -> [String: Any] in
+                var item: [String: Any] = ["name": server.name, "label": server.label, "enabled": server.enabled]
+                switch server.source {
+                case .user: item["source"] = "user"
+                case .local: item["source"] = "local"
+                case .project: item["source"] = "project"
+                case .plugin(let plugin):
+                    item["source"] = "plugin"
+                    item["plugin"] = plugin
+                }
+                return item
+            }
+            self?.queue.async { self?.sendJSON(reply) }
         }
     }
 
@@ -346,6 +394,9 @@ final class WebBridge {
         m.rows = max(1, min(rows, 1000))
         pendingCreates[nextInternalID] = id
         nextInternalID -= 1
+        // Servers that are off by default, before the agent reads its settings. Short wait for
+        // Claude Code's lock: a start must not hang on it.
+        if ClaudeMCP.isClaude(command) { ClaudeMCP.applyDefaults(for: cwd, wait: 0.3) }
         server?.log("start \(command.isEmpty ? "shell" : command) in \(cwd)")
         daemonWriter?.send(Frame.json(m))
     }

@@ -1,5 +1,7 @@
 import Foundation
-import TerminalyKit
+#if canImport(Glibc)
+import Glibc
+#endif
 
 /// The MCP servers Claude Code starts for a folder, and the per-project switch behind its `/mcp`
 /// dialog. Each enabled server is a process tree of its own in every session (often 100–300 MB),
@@ -7,39 +9,42 @@ import TerminalyKit
 ///
 /// Claude has no command for this: the switch is `projects[<repo>].disabledMcpServers` in its
 /// `.claude.json`, which it rewrites all the time. Writes here take the same lock it does.
-enum ClaudeMCP {
-    enum Source: Equatable {
+public enum ClaudeMCP {
+    public enum Source: Equatable, Sendable {
         case user, local, project
         case plugin(String)
     }
 
-    struct Server: Identifiable, Equatable {
+    public struct Server: Identifiable, Equatable, Sendable {
         /// The name Claude knows it by, as stored in `disabledMcpServers`.
-        let name: String
-        let label: String
-        let source: Source
-        var enabled: Bool
-        var id: String { name }
+        public let name: String
+        public let label: String
+        public let source: Source
+        public var enabled: Bool
+        public var id: String { name }
+
+        public init(name: String, label: String, source: Source, enabled: Bool) {
+            self.name = name
+            self.label = label
+            self.source = source
+            self.enabled = enabled
+        }
     }
 
-    enum Failure: LocalizedError {
-        case busy, invalid
-
-        var errorDescription: String? {
-            switch self {
-            case .busy: return String(localized: "Claude Code is using its settings file. Try again.")
-            case .invalid: return String(localized: "Claude Code's settings file could not be read.")
-            }
-        }
+    public enum Failure: Error {
+        /// Claude Code held the lock on its state file for too long.
+        case busy
+        /// The state file is missing or is not JSON.
+        case invalid
     }
 
     /// Claude Code keeps everything in `CLAUDE_CONFIG_DIR` when set; otherwise the settings folder
     /// is `~/.claude` and the state file sits next to it, in the home folder.
-    struct Paths {
-        var configDir: URL
-        var stateFile: URL
+    public struct Paths: Sendable {
+        public var configDir: URL
+        public var stateFile: URL
 
-        static var standard: Paths {
+        public static var standard: Paths {
             if let dir = ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"], !dir.isEmpty {
                 return Paths(configDir: URL(fileURLWithPath: dir))
             }
@@ -47,18 +52,18 @@ enum ClaudeMCP {
             return Paths(configDir: home.appendingPathComponent(".claude"), stateFile: home.appendingPathComponent(".claude.json"))
         }
 
-        init(configDir: URL, stateFile: URL? = nil) {
+        public init(configDir: URL, stateFile: URL? = nil) {
             self.configDir = configDir
             self.stateFile = stateFile ?? configDir.appendingPathComponent(".claude.json")
         }
     }
 
-    static func isClaude(_ command: String) -> Bool {
+    public static func isClaude(_ command: String) -> Bool {
         command.split(separator: " ").first == "claude"
     }
 
     /// Runs git: call it off the main thread.
-    static func servers(for directory: String, paths: Paths = .standard) -> [Server] {
+    public static func servers(for directory: String, paths: Paths = .standard) -> [Server] {
         let state = object(at: paths.stateFile)
         let root = projectRoot(of: directory)
         let project = (state["projects"] as? [String: Any])?[projectKey(root, in: state)] as? [String: Any] ?? [:]
@@ -84,7 +89,7 @@ enum ClaudeMCP {
     }
 
     /// Takes effect in sessions started afterwards: a running agent keeps the servers it has.
-    static func setEnabled(_ name: String, _ enabled: Bool, for directory: String, paths: Paths = .standard) throws {
+    public static func setEnabled(_ name: String, _ enabled: Bool, for directory: String, paths: Paths = .standard) throws {
         try editDisabled(root: projectRoot(of: directory), paths: paths, wait: 3) { disabled in
             disabled.removeAll { $0 == name }
             if !enabled { disabled.append(name) }
@@ -119,20 +124,22 @@ enum ClaudeMCP {
     /// every project until that project switches it off. Terminaly keeps the list of servers that
     /// should start switched off and applies it once per project, before the project's first
     /// Claude session and before listing its servers. After that the project's own switch stands.
-    struct Defaults: Codable, Equatable {
-        var off: [String] = []
+    public struct Defaults: Codable, Equatable, Sendable {
+        public var off: [String] = []
         /// Per project root, the servers already switched off there once.
-        var applied: [String: [String]] = [:]
+        public var applied: [String: [String]] = [:]
 
-        static var url: URL { TerminalyPaths.stateDir.appendingPathComponent("mcp-defaults.json") }
+        public init() {}
 
-        static func load(from url: URL = url) -> Defaults {
+        public static var url: URL { TerminalyPaths.stateDir.appendingPathComponent("mcp-defaults.json") }
+
+        public static func load(from url: URL = url) -> Defaults {
             guard let data = try? Data(contentsOf: url),
                   let value = try? JSONDecoder().decode(Defaults.self, from: data) else { return Defaults() }
             return value
         }
 
-        func save(to url: URL = url) throws {
+        public func save(to url: URL = url) throws {
             let enc = JSONEncoder()
             enc.outputFormatting = [.prettyPrinted, .sortedKeys]
             try enc.encode(self).write(to: url, options: .atomic)
@@ -141,7 +148,7 @@ enum ClaudeMCP {
 
     /// The servers every project gets: the ones that can be made off by default. `enabled` here
     /// means "on by default".
-    static func globalServers(paths: Paths = .standard, defaults: URL = Defaults.url) -> [Server] {
+    public static func globalServers(paths: Paths = .standard, defaults: URL = Defaults.url) -> [Server] {
         let off = Set(Defaults.load(from: defaults).off)
         var found: [Server] = serverNames(object(at: paths.stateFile)["mcpServers"]).map {
             Server(name: $0, label: $0, source: .user, enabled: !off.contains($0))
@@ -155,7 +162,7 @@ enum ClaudeMCP {
         return found.sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
     }
 
-    static func setOffByDefault(_ name: String, _ off: Bool, defaults url: URL = Defaults.url) throws {
+    public static func setOffByDefault(_ name: String, _ off: Bool, defaults url: URL = Defaults.url) throws {
         var defaults = Defaults.load(from: url)
         defaults.off.removeAll { $0 == name }
         if off {
@@ -169,7 +176,7 @@ enum ClaudeMCP {
 
     /// Switches the off-by-default servers off in the project of `directory`, each one only the
     /// first time. `wait` is how long to wait for Claude Code's lock: keep it short on the main thread.
-    static func applyDefaults(for directory: String, paths: Paths = .standard, defaults url: URL = Defaults.url, wait: TimeInterval = 3) {
+    public static func applyDefaults(for directory: String, paths: Paths = .standard, defaults url: URL = Defaults.url, wait: TimeInterval = 3) {
         var defaults = Defaults.load(from: url)
         guard !defaults.off.isEmpty else { return }
         let root = projectRoot(of: directory)

@@ -1,5 +1,7 @@
 import SwiftUI
+import TerminalyKit
 import UniformTypeIdentifiers
+import TerminalyKit
 
 /// Sidebar = horizontal pager with one page per workspace (swipe with two fingers),
 /// each tinted with its workspace color, plus a footer with workspace icon dots.
@@ -502,8 +504,10 @@ struct MCPMenuSection: View {
             do {
                 try ClaudeMCP.setEnabled(server.name, enable, for: dir)
                 message = nil
+            } catch ClaudeMCP.Failure.busy {
+                message = String(localized: "Claude Code is using its settings file. Try again.")
             } catch {
-                message = error.localizedDescription
+                message = String(localized: "Claude Code's settings file could not be read.")
             }
             let found = ClaudeMCP.servers(for: dir)
             await MainActor.run {

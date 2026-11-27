@@ -34,6 +34,10 @@
       resizedBar: "Sized for another screen", fitHere: "Fit Here",
       resourcesNote: "Pausing stops all CPU use and keeps the session as it is; its memory stays allocated. To free memory, stop the session: Claude conversations can be resumed later.",
       dismiss: "Dismiss",
+      mcp: "MCP servers", mcpNone: "No MCP servers in this folder.", mcpLoading: "Loading…",
+      mcpRestart: "Restart to apply", mcpNote: "Applies when the session restarts.", mcpNoteStopped: "Applies the next time the session starts.",
+      mcpUser: "All projects", mcpLocal: "This project", mcpPlugin: "Plugin {name}", on: "On", off: "Off",
+      mcpBusy: "Claude Code is using its settings file. Try again.", mcpFailed: "Could not change the server.",
     },
     es: {
       loginHelp: "Pega el token de acceso de Terminaly → Ajustes → Web de tu Mac.",
@@ -56,6 +60,10 @@
       resizedBar: "Ajustado a otra pantalla", fitHere: "Ajustar aquí",
       resourcesNote: "Pausar detiene todo el uso de CPU y deja la sesión tal cual; la memoria sigue ocupada. Para liberarla, detén la sesión: las conversaciones de Claude se pueden reanudar después.",
       dismiss: "Descartar",
+      mcp: "Servidores MCP", mcpNone: "No hay servidores MCP en esta carpeta.", mcpLoading: "Cargando…",
+      mcpRestart: "Reiniciar para aplicar", mcpNote: "Se aplica al reiniciar la sesión.", mcpNoteStopped: "Se aplica la próxima vez que arranque la sesión.",
+      mcpUser: "Todos los proyectos", mcpLocal: "Este proyecto", mcpPlugin: "Plugin {name}", on: "Activado", off: "Desactivado",
+      mcpBusy: "Claude Code está usando su archivo de ajustes. Inténtalo de nuevo.", mcpFailed: "No se ha podido cambiar el servidor.",
     },
   };
   const lang = (navigator.languages || [navigator.language]).some((l) => /^(es|ca|gl|eu)\b/i.test(l)) ? "es" : "en";
@@ -305,6 +313,9 @@
         }
         refreshCatalogSoon();
         select(msg.id, true);
+        break;
+      case "mcp":
+        onMCP(msg);
         break;
     }
   }
@@ -684,10 +695,18 @@
     if (label) menu.append(el("div", "menu-label", label));
     for (const item of items) {
       if (item === "-") { menu.append(el("hr")); continue; }
+      if (item.note) { menu.append(el("div", "menu-note", item.note)); continue; }
       const b = el("button", item.danger ? "danger" : null, item.label);
-      b.setAttribute("role", "menuitem");
+      if (item.checked === undefined) {
+        b.setAttribute("role", "menuitem");
+      } else {
+        b.setAttribute("role", "menuitemcheckbox");
+        b.setAttribute("aria-checked", String(item.checked));
+        b.prepend(el("span", "check", item.checked ? "✓" : ""));
+      }
       if (item.detail) b.append(el("span", "cmd", item.detail));
-      b.onclick = (ev) => { ev.stopPropagation(); closeMenu(); item.run(); };
+      // `keep`: the item changes something inside the menu, which redraws itself.
+      b.onclick = (ev) => { ev.stopPropagation(); if (!item.keep) closeMenu(); item.run(); };
       menu.append(b);
     }
     menu.hidden = false;
@@ -709,7 +728,50 @@
 
   function openSessionMenu(id, at) {
     const items = sessionActions(id);
+    // Claude Code only, and only sessions the app has saved: the bridge takes the folder from there.
+    if ((saved(id)?.command || "").split(/\s+/)[0] === "claude") {
+      items.push("-", { label: t("mcp"), keep: true, run: () => openMCPMenu(id, at) });
+    }
     if (items.length) showMenu(`s:${id}`, view(id).title, items, at);
+  }
+
+  // The MCP servers Claude Code starts in the session's folder, each with its switch for that project.
+  let mcpMenu = null; // { id, at, servers, changed, error }
+
+  function openMCPMenu(id, at) {
+    mcpMenu = { id, at, servers: null, changed: false, error: null };
+    command({ type: "mcp", id });
+    renderMCPMenu();
+  }
+
+  function renderMCPMenu() {
+    const m = mcpMenu;
+    const sourceName = (s) => s.source === "plugin" ? t("mcpPlugin", { name: s.plugin }) : s.source === "user" ? t("mcpUser")
+      : s.source === "local" ? t("mcpLocal") : ".mcp.json";
+    const items = [];
+    if (!m.servers) items.push({ note: t("mcpLoading") });
+    else if (!m.servers.length) items.push({ note: t("mcpNone") });
+    for (const s of m.servers || []) {
+      items.push({ label: s.label, detail: sourceName(s), checked: s.enabled, keep: true,
+        run: () => command({ type: "mcpSet", id: m.id, name: s.name, enabled: !s.enabled }) });
+    }
+    if (m.error) items.push({ note: m.error });
+    if (m.changed) {
+      const v = view(m.id);
+      items.push("-", { note: v.running ? t("mcpNote") : t("mcpNoteStopped") });
+      if (v.running) items.push({ label: t("mcpRestart"), run: () => restart(m.id, v.resumable) });
+    }
+    menuOwner = null; // a redraw, not a second click on the button that opened it
+    showMenu(`m:${m.id}`, `${t("mcp")} · ${view(m.id).title}`, items, m.at);
+  }
+
+  function onMCP(msg) {
+    const m = mcpMenu;
+    if (!m || msg.id !== m.id || menuOwner !== `m:${m.id}`) return;
+    m.servers = msg.servers || [];
+    m.changed = m.changed || !!msg.changed;
+    m.error = !msg.error ? null : msg.error === "busy" ? t("mcpBusy") : t("mcpFailed");
+    renderMCPMenu();
   }
 
   function openPresetMenu(anchor, group) {
