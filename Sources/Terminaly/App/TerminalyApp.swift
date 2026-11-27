@@ -67,6 +67,8 @@ struct AppCommands: Commands {
             // ⌘F stays with the terminal's own search.
             Button("Filter Sessions") { SidebarFilterState.shared.requestFocus() }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
+            Button("Send to Sessions…") { BroadcastState.shared.isPresented = true }
+                .keyboardShortcut("b", modifiers: [.command, .shift])
             Divider()
             Button("Rename Session…") { store.renamingSessionID = store.selectedSessionID }
                 .disabled(store.selectedSessionID == nil)

@@ -299,3 +299,15 @@
 "MCP servers" = "Servidores MCP";
 "No MCP servers set up for every project." = "No hay servidores MCP instalados para todos los proyectos.";
 "Each server is a separate process in every Claude Code session, often 100–300 MB. One switched off here stays installed but starts off in every project; turn it on for a project from the session's “…” menu." = "Cada servidor es un proceso aparte en cada sesión de Claude Code, a menudo de 100–300 MB. Uno apagado aquí sigue instalado pero arranca apagado en todos los proyectos; actívalo en un proyecto desde el menú «…» de la sesión.";
+
+/* Send to Sessions (broadcast) */
+"Send to Sessions…" = "Enviar a sesiones…";
+"Send to Sessions" = "Enviar a sesiones";
+"Type @name to pick sessions; mentions are left out of the message." = "Escribe @nombre para elegir sesiones; las menciones no se envían.";
+"No running sessions in this workspace." = "No hay sesiones en marcha en este espacio.";
+"Sent to %lld. Skipped, waiting for permission: %@" = "Enviado a %lld. Omitidas, esperando un permiso: %@";
+"Send to %lld" = "Enviar a %lld";
+"Send (⌘↩)" = "Enviar (⌘↩)";
+"Waiting for permission: skipped" = "Esperando un permiso: se omite";
+"Busy: gets it after its turn" = "Ocupada: lo recibe al acabar su turno";
+"Done" = "Hecho";

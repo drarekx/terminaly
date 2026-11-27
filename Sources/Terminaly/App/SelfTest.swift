@@ -27,6 +27,7 @@ enum SelfTest {
         // 0. Workspaces: legacy migration (when seeded), per-workspace layouts, moving projects.
         if !workspaceChecks(store) { return }
         if !filterChecks() { return finish(false, "sidebar filter") }
+        if !broadcastChecks() { return finish(false, "broadcast mentions") }
         if !mcpChecks() { return finish(false, "mcp servers") }
 
         let project = store.addProject(at: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
@@ -62,6 +63,17 @@ enum SelfTest {
         let alive = listed.first { $0.id == b.id }?.running ?? false
         print("3 relaunch: alive=\(alive) replayed=\(reattached)")
         guard alive && reattached else { return finish(false, "relaunch") }
+
+        // 3b. Send to Sessions: text, then Enter from the host; skipped while a permission is pending.
+        let bmarker = "BCAST_\(Int.random(in: 1000...9999))"
+        let sent = store.broadcast("echo \(bmarker)x", to: [b.id]).sent == [b.id]
+        let ran = await waitUntil(5) { (store.terminals.view(for: b.id)?.screenText().components(separatedBy: "\(bmarker)x").count ?? 0) > 2 }
+        let bi = store.sessions.firstIndex { $0.id == b.id }!
+        store.sessions[bi].permissionPending = true
+        let skippedOK = store.broadcast("echo no", to: [b.id]).skipped == [b.id]
+        store.sessions[bi].permissionPending = false
+        print("3b broadcast: sent=\(sent) ran=\(ran) skipped=\(skippedOK)")
+        guard sent && ran && skippedOK else { return finish(false, "broadcast") }
 
         // 4. Drag-to-pane placement and zoom
         _ = store.addWorkspace(name: "Panes")
@@ -459,6 +471,25 @@ enum SelfTest {
             titles(SessionFilter(query: "zzz")).isEmpty,
         ]
         print("0 sidebar filter: \(checks.map { $0 ? "ok" : "FAIL" })")
+        return !checks.contains(false)
+    }
+
+    private static func broadcastChecks() -> Bool {
+        let api = UUID(), web = UUID(), alg = UUID()
+        let sessions = [(id: api, title: "API fix"), (id: web, title: "Web UI"), (id: alg, title: "Worker Álgebra")]
+        func p(_ text: String) -> (String, Set<UUID>) {
+            let r = BroadcastParser.parse(text: text, sessions: sessions)
+            return (r.cleanText, r.matchedIDs)
+        }
+        let checks = [
+            p("run the tests") == ("run the tests", []),
+            p("@api run the tests") == ("run the tests", [api]),
+            p("@WEB, @algebra: rebase on main") == ("rebase on main", [web, alg]),    // case, accents, punctuation
+            p("@api-fix and @worker go") == ("and go", [api, alg]),                    // dashes for spaces, word prefix
+            p("mail me@api.dev about @nobody") == ("mail me@api.dev about @nobody", []), // not a mention / no match kept
+            p("fix it\n@ui") == ("fix it", [web]),
+        ]
+        print("0 broadcast: \(checks.map { $0 ? "ok" : "FAIL" })")
         return !checks.contains(false)
     }
 

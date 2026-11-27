@@ -49,6 +49,12 @@ struct RootView: View {
                 WorktreeSheet(project: p).environment(store)
             }
         }
+        .sheet(isPresented: Binding(
+            get: { BroadcastState.shared.isPresented },
+            set: { BroadcastState.shared.isPresented = $0 }
+        )) {
+            BroadcastSheet().environment(store)
+        }
         .onChange(of: store.renamingSessionID) { _, id in
             renameText = store.session(id)?.title ?? ""
         }
