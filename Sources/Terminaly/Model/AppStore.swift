@@ -123,7 +123,7 @@ final class AppStore {
     func sessions(in project: Project, archived: Bool = false) -> [Session] {
         sessions
             .filter { $0.projectID == project.id && $0.archived == archived }
-            .sorted { ($0.pinned ? 0 : 1, $0.createdAt) < ($1.pinned ? 0 : 1, $1.createdAt) }
+            .sorted(by: SessionOrder.precedes)
     }
 
     var currentWorkspace: Workspace? { workspaces.first { $0.id == selectedWorkspaceID } }
@@ -747,6 +747,41 @@ extension AppStore {
         restart(id)
     }
 
+    /// Agent sessions with a command to start a fresh conversation (`/clear`, `/new`); not shells.
+    func offersClearContext(_ s: Session) -> Bool {
+        AgentClear.command(for: s.command) != nil && terminals.isRunning(s.id)
+    }
+
+    /// Ready for a prompt: typed into a permission dialog, the command would answer it instead.
+    func canClearContext(_ s: Session) -> Bool {
+        guard offersClearContext(s) else { return false }
+        switch s.status {
+        case .idle, .working: return true
+        case .needsInput: return !s.permissionPending
+        default: return false
+        }
+    }
+
+    /// The agent starts a new conversation in the same process; its hooks then report the new
+    /// conversation id, which resume uses from then on.
+    func clearContext(_ id: UUID) {
+        guard let s = session(id), canClearContext(s), let command = AgentClear.command(for: s.command) else { return }
+        terminals.sendLine(id, command)
+    }
+
+    func confirmClearContext(_ id: UUID) {
+        guard let s = session(id), canClearContext(s) else { return }
+        if s.status == .working {
+            let alert = NSAlert()
+            alert.messageText = String(localized: "Clear the context of “\(s.title)”?")
+            alert.informativeText = String(localized: "The agent is working. Clearing starts a new conversation and its current work may be lost; the previous conversation can no longer be resumed from Terminaly.")
+            alert.addButton(withTitle: String(localized: "Clear Context"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        clearContext(id)
+    }
+
     /// Restarts the agent so it reads its settings again (e.g. which MCP servers to start),
     /// continuing its conversation when it has one saved.
     func confirmReload(_ id: UUID) {
@@ -869,21 +904,13 @@ extension AppStore {
 extension AppStore {
     /// Sessions this one started (`tly new` run inside it) that are listed with it.
     func workers(of id: UUID) -> [Session] {
-        guard let parent = session(id), parent.parentID == nil || session(parent.parentID)?.projectID != parent.projectID
-        else { return [] }
-        return sessions
-            .filter { $0.parentID == id && !$0.archived && $0.projectID == parent.projectID }
-            .sorted { $0.createdAt < $1.createdAt }
+        SessionOrder.workers(of: id, in: sessions)
     }
 
     /// Sidebar order: every session followed by its workers. A worker whose parent is gone,
     /// archived or in another project is listed on its own.
     func sidebarSessions(in project: Project) -> [(session: Session, isWorker: Bool)] {
-        let all = sessions(in: project)
-        let nested = Set(all.filter { !$0.archived }.flatMap { workers(of: $0.id) }.map(\.id))
-        return all.filter { !nested.contains($0.id) }.flatMap { s in
-            [(s, false)] + (s.workersCollapsed == true ? [] : workers(of: s.id).map { ($0, true) })
-        }
+        SessionOrder.sidebar(sessions, project: project.id)
     }
 
     func toggleWorkersCollapsed(_ id: UUID) {

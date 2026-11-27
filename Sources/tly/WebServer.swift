@@ -209,6 +209,7 @@ final class WebServer {
                     "command": s.command ?? "",
                     "createdAt": s.createdAt?.timeIntervalSinceReferenceDate ?? 0,
                     "parentID": s.parentID?.uuidString ?? "",
+                    "pinned": s.pinned == true,
                     "resumable": AgentResume.command(for: s.command ?? "", agentSessionID: s.agentSessionID) != nil,
                 ]
             },
@@ -604,6 +605,7 @@ struct AppStateFile: Decodable {
         var worktreePath: String?
         var createdAt: Date?
         var parentID: UUID?
+        var pinned: Bool?
     }
 
     var workspaces: [Workspace]?

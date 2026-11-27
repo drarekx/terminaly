@@ -53,17 +53,6 @@ final class BroadcastState {
     var previewText = ""
 }
 
-extension TerminalRegistry {
-    /// Same `send` the CLI uses: the text, then Enter 100 ms later from the daemon, because agent
-    /// TUIs take text and Enter arriving together as a paste where Enter is a newline.
-    func sendLine(_ id: UUID, text: String) {
-        var m = Message(type: "send", id: id)
-        m.text = text
-        m.enter = true
-        client.request(m)
-    }
-}
-
 extension AppStore {
     /// Sessions a prompt can go to: running in the host. Paused ones drop their input.
     func canReceiveBroadcast(_ s: Session) -> Bool {
@@ -77,7 +66,7 @@ extension AppStore {
         var sent: [UUID] = [], skipped: [UUID] = []
         for id in ids {
             guard let s = session(id), canReceiveBroadcast(s), !s.permissionPending else { skipped.append(id); continue }
-            terminals.sendLine(id, text: text)
+            terminals.sendLine(id, text)
             sent.append(id)
         }
         return (sent, skipped)

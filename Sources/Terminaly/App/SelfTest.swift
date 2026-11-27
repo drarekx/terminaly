@@ -31,6 +31,7 @@ enum SelfTest {
         if !mcpChecks() { return finish(false, "mcp servers") }
         if !changesChecks() { return finish(false, "show changes") }
         if !toolActivityChecks() { return finish(false, "tool activity") }
+        if !pinAndClearChecks() { return finish(false, "pinned order / clear context") }
 
         let project = store.addProject(at: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
         if let ws = store.selectedWorkspaceID { store.moveProject(project.id, to: ws) }
@@ -124,6 +125,22 @@ enum SelfTest {
         let sanitized = claude.resumeCommand == "claude --resume xrm-rf"
         print("5 permission: pending=\(pending) answered=\(answered) resume=\(resumeOK) sanitized=\(sanitized)")
         guard pending && answered && resumeOK && sanitized else { return finish(false, "permission") }
+
+        // 5b. Clear Context: the command arrives as a line (text, then Enter), and the new conversation
+        // id the agent reports while staying idle reaches the app, so resume uses it.
+        let startHook = ClaudeHookInstaller.command(for: "SessionStart")
+        let clearCmd = "echo '{\"session_id\":\"conv-1\"}' | ( \(startHook) ); read -r line; echo GOT-$line-END; "
+            + "echo '{\"session_id\":\"conv-2\"}' | ( \(startHook) ); sleep 30"
+        guard let cc = store.newSession(preset: Preset(label: "Clear", command: clearCmd), in: project) else { return finish(false, "create") }
+        let firstID = await waitUntil(5) { store.session(cc.id)?.status == .idle && store.session(cc.id)?.agentSessionID == "conv-1" }
+        store.terminals.sendLine(cc.id, "/clear")
+        let cleared = await waitUntil(5) {
+            (store.terminals.view(for: cc.id)?.screenText().contains("GOT-/clear-END") ?? false)
+                && store.session(cc.id)?.agentSessionID == "conv-2"
+        }
+        print("5b clear context: firstID=\(firstID) newID=\(cleared)")
+        store.stop(cc.id)
+        guard firstID && cleared else { return finish(false, "clear context") }
 
         // 6. Switching sessions in one pane shows exactly the selected terminal, on top
         _ = store.addWorkspace(name: "Switch")
@@ -525,6 +542,40 @@ enum SelfTest {
             p("fix it\n@ui") == ("fix it", [web]),
         ]
         print("0 broadcast: \(checks.map { $0 ? "ok" : "FAIL" })")
+        return !checks.contains(false)
+    }
+
+    /// Pinned sessions first within their project, workers only among their siblings; the
+    /// command each agent uses to clear its context.
+    private static func pinAndClearChecks() -> Bool {
+        let pid = UUID(), other = UUID()
+        var t = Date(timeIntervalSinceReferenceDate: 0)
+        func s(_ title: String, pinned: Bool = false, parent: Session? = nil, project: UUID? = nil) -> Session {
+            t += 1
+            var s = Session(projectID: project ?? pid, title: title, command: "", symbol: "terminal", createdAt: t)
+            s.pinned = pinned
+            s.parentID = parent?.id
+            return s
+        }
+        let a = s("A"), b = s("B"), w1 = s("W1", parent: b), w2 = s("W2", pinned: true, parent: b)
+        let c = s("C", pinned: true), wc = s("WC", parent: c), elsewhere = s("X", pinned: true, project: other)
+        var collapsed = b
+        collapsed.workersCollapsed = true
+        func order(_ list: [Session]) -> [String] {
+            SessionOrder.sidebar(list, project: pid).map { ($0.isWorker ? "-" : "") + $0.session.title }
+        }
+        let all = [a, b, w1, w2, c, wc, elsewhere]
+        let checks = [
+            order(all) == ["C", "-WC", "A", "B", "-W2", "-W1"],
+            order([a, collapsed, w1, w2]) == ["A", "B"],
+            // A pinned worker stays under its parent even when the parent is not pinned.
+            order([a, b, w2]) == ["A", "B", "-W2"],
+            AgentClear.command(for: "claude --model opus") == "/clear",
+            AgentClear.command(for: "codex") == "/new",
+            AgentClear.command(for: "opencode") == "/new",
+            AgentClear.command(for: "") == nil && AgentClear.command(for: "npm run dev") == nil,
+        ]
+        print("0 pinned order / clear: \(checks.map { $0 ? "ok" : "FAIL" })")
         return !checks.contains(false)
     }
 
