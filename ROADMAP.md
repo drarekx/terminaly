@@ -57,6 +57,8 @@ Varios agentes trabajando a la vez bajo un agente «jefe». Terminaly no orquest
 | ✅ | Primitivas en `tly` | `tly new --prompt --worktree --title` (la sesión lanzada desde dentro de otra queda como su worker), `tly ask` (envía, espera el turno y devuelve la respuesta), `tly result`, `tly wait` con varias sesiones y `--any`, `kill/rm --tree`. Turnos contados en el daemon: ya no hay carrera entre `send` y `wait`. Límites: un worker no lanza workers y máximo 6 por jefe. | M |
 | ✅ | Workers en la barra lateral | Anidados bajo su jefe y plegables, con resumen en la fila del jefe («Pide respuesta 1 · Trabajando 3»). También en la web (sin plegar). | M |
 | ✅ | Ver el swarm | «Ver swarm» en el menú del jefe: abre al jefe y sus workers en rejilla de paneles. | S |
+| ✅ | Qué hace cada agente | La herramienta en curso («Edit AppStore.swift», «Bash: npm test») en la línea de estado de la barra lateral, la cabecera del panel y la web. | S |
+| ✅ | Ver cambios | Archivos cambiados (+/−) de la carpeta de una sesión y commits de su rama que no están en la principal, para revisar workers antes de integrar. | S |
 | ✅ | Limpieza | «Quitar workers terminados»: borra los que están listos o han terminado y quita sus worktrees (sin forzar; la rama se conserva). | S |
 | ✅ | Skill para el jefe | Skill `terminaly-swarm` instalable desde Ajustes → Agentes: enseña al agente a dividir, lanzar en worktrees, esperar, revisar e integrar con `tly`. | S |
 | ✅ | Límite configurable | Máximo de workers por jefe en Ajustes → Agentes (1–16, por defecto 6); se aplica sin reiniciar el daemon. | S |
@@ -69,7 +71,9 @@ Los permisos de un worker los aprueba la persona (barra y notificación de siemp
 | | Funcionalidad | Qué y por qué | Esfuerzo |
 |---|---|---|---|
 | ✅ | Icono en la barra de menús | Sesiones que piden respuesta y aprobación rápida sin abrir la ventana. | M |
-| | Enviar a varias sesiones | Escribir un prompt una vez y mandarlo a las sesiones seleccionadas. | S |
+| ✅ | Enviar a varias sesiones | Escribir un prompt una vez y mandarlo a las sesiones seleccionadas, con casillas o `@nombre` (⇧⌘B). | S |
+| ✅ | Fijar sesiones | «Fijar arriba»: las fijadas van primero en su proyecto, también en la web. | S |
+| ✅ | Limpiar contexto | Manda `/clear` (Claude) o `/new` (Codex, opencode) desde el menú de la sesión; «Reanudar» sigue a la conversación nueva. | S |
 | ✅ | Filtros y búsqueda | Filtrar la barra lateral por estado y buscar sesiones por nombre, proyecto o rama (⇧⌘F). | S |
 | ✅ | Saltar a la que pide respuesta | ⌘J recorre las sesiones que piden respuesta de todos los workspaces. | S |
 | ✅ ★ | Pausar sesiones y ver el consumo | Pausar/continuar (SIGSTOP al árbol de procesos) y «Detener» para liberar memoria. En el pie de la barra lateral: sesiones abiertas, memoria y CPU; al pulsar, detalle por sesión con la app y el daemon. | M |
