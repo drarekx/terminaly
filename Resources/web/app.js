@@ -629,14 +629,10 @@
     dot.dataset.status = v.running ? v.status : "exited";
     const text = el("span", "row-text");
     text.append(el("span", "row-title", v.title));
-    const sub = el("span", "row-sub", t(v.status));
+    const sub = el("span", "row-sub", v.activity ? `${t(v.status)} · ${v.activity}` : t(v.status));
+    if (v.activity) sub.title = v.activity;
     sub.dataset.status = v.status;
     text.append(sub);
-    if (v.activity) {
-      const act = el("span", "row-sub row-activity", v.activity);
-      act.title = v.activity;
-      text.append(act);
-    }
     if (workers.length) {
       // "Needs input 1 · Working 3": what needs you first.
       const line = el("span", "row-sub row-workers");
