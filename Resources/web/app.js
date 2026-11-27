@@ -24,7 +24,7 @@
       stoppedBar: "This session is stopped", startFresh: "Start Fresh", resumeConversation: "Resume Conversation",
       start: "Start", newSession: "New session", newIn: "New session in", startFailed: "Could not start the session",
       stoppedEmpty: "Start it again to keep working.",
-      open: "Open", restart: "Restart", stop: "Stop", continue: "Continue", moreActions: "More actions",
+      open: "Open", restart: "Restart", stop: "Stop", continue: "Continue", moreActions: "More actions", pinned: "Pinned",
       expand: "Expand", collapse: "Collapse",
       resources: "Resources", resourcesHelp: "Sessions and resource usage", memory: "Memory",
       oneSession: "1 session", nSessions: "{n} sessions", runningPaused: "{r} running · {p} paused",
@@ -46,7 +46,7 @@
       stoppedBar: "Esta sesión está detenida", startFresh: "Empezar de cero", resumeConversation: "Reanudar conversación",
       start: "Iniciar", newSession: "Nueva sesión", newIn: "Nueva sesión en", startFailed: "No se ha podido iniciar la sesión",
       stoppedEmpty: "Iníciala de nuevo para seguir trabajando.",
-      open: "Abrir", restart: "Reiniciar", stop: "Detener", continue: "Continuar", moreActions: "Más acciones",
+      open: "Abrir", restart: "Reiniciar", stop: "Detener", continue: "Continuar", moreActions: "Más acciones", pinned: "Fijada",
       expand: "Desplegar", collapse: "Contraer",
       resources: "Recursos", resourcesHelp: "Sesiones y consumo de recursos", memory: "Memoria",
       oneSession: "1 sesión", nSessions: "{n} sesiones", runningPaused: "{r} en marcha · {p} en pausa",
@@ -380,6 +380,7 @@
       parentID: meta?.parentID || info?.parent || null,
       cwd: info?.cwd || "",
       resumable: !!meta?.resumable,
+      pinned: !!meta?.pinned,
       createdAt: meta?.createdAt ?? info?.createdAt ?? 0,
     };
   }
@@ -497,6 +498,7 @@
 
   const plusIcon = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
   const chevronIcon = '<svg class="chevron" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const pinIcon = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 2h4l-.6 4.2L12 9H4l2.6-2.8z" fill="currentColor"/><path d="M8 9v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
   const moreIcon = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="3.5" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="12.5" cy="8" r="1.4" fill="currentColor"/></svg>';
   const pauseIcon = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="4" y="3" width="2.6" height="10" rx="0.8" fill="currentColor"/><rect x="9.4" y="3" width="2.6" height="10" rx="0.8" fill="currentColor"/></svg>';
   const stopIcon = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1.6" fill="currentColor"/></svg>';
@@ -577,8 +579,8 @@
       }
       list.append(head);
       if (folded) continue;
-      // Running first, then stopped; each by creation.
-      g.items.sort((a, b) => (b.running - a.running) || (a.createdAt - b.createdAt));
+      // Pinned first (as in the app; workers only among their siblings), then running, then stopped; each by creation.
+      g.items.sort((a, b) => (b.pinned - a.pinned) || (b.running - a.running) || (a.createdAt - b.createdAt));
       // Workers right under the session that started them, when it is in the same project.
       const inGroup = new Set(g.items.map((v) => v.id));
       const workersOf = (id) => g.items.filter((w) => w.parentID === id);
@@ -643,6 +645,14 @@
       text.append(line);
     }
     r.append(dot, text);
+    if (v.pinned) {
+      const pin = el("span", "row-pin");
+      pin.innerHTML = pinIcon;
+      pin.title = t("pinned");
+      pin.setAttribute("role", "img");
+      pin.setAttribute("aria-label", t("pinned"));
+      r.append(pin);
+    }
 
     const more = el("button", "icon-btn more");
     more.innerHTML = moreIcon;

@@ -187,7 +187,6 @@ private struct WorkspacePage: View {
     @ViewBuilder
     private func sessionMenu(_ session: Session) -> some View {
         Button("Rename…") { store.renamingSessionID = session.id }
-        Button(session.pinned ? "Unpin" : "Pin") { store.togglePinned(session.id) }
         Button("Restart") { store.confirmRestart(session.id) }
         if store.terminals.isRunning(session.id) {
             if session.status == .paused {
@@ -196,6 +195,12 @@ private struct WorkspacePage: View {
                 Button("Pause") { store.pause(session.id) }
             }
             Button("Stop") { store.stop(session.id) }
+        }
+        // Pin and Clear Context.
+        if session.pinned {
+            Button("Unpin") { store.togglePinned(session.id) }
+        } else {
+            Button("Pin to Top") { store.togglePinned(session.id) }
         }
         Divider()
         Button("Split Right With This") {
@@ -375,9 +380,6 @@ private struct SessionMenu: View {
             MenuRow(title: "Restore", icon: "arrow.uturn.backward") { store.show(session.id) }
         } else {
             MenuRow(title: "Rename…", icon: "pencil") { store.renamingSessionID = session.id }
-            MenuRow(title: session.pinned ? "Unpin" : "Pin", icon: session.pinned ? "pin.slash" : "pin") {
-                store.togglePinned(session.id)
-            }
             MenuRow(title: "Restart", icon: "arrow.clockwise") { store.confirmRestart(session.id) }
             if store.terminals.isRunning(session.id) {
                 if session.status == .paused {
@@ -386,6 +388,12 @@ private struct SessionMenu: View {
                     MenuRow(title: "Pause", icon: "pause") { store.pause(session.id) }
                 }
                 MenuRow(title: "Stop", icon: "stop") { store.stop(session.id) }
+            }
+            // Pin and Clear Context.
+            if session.pinned {
+                MenuRow(title: "Unpin", icon: "pin.slash") { store.togglePinned(session.id) }
+            } else {
+                MenuRow(title: "Pin to Top", icon: "pin") { store.togglePinned(session.id) }
             }
             if session.resumeCommand != nil && !store.terminals.isRunning(session.id) {
                 MenuRow(title: "Resume Conversation", icon: "arrow.uturn.forward") { store.resume(session.id) }
@@ -638,7 +646,9 @@ struct SessionRow: View {
             }
             Spacer(minLength: 4)
             if session.pinned {
-                Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(Theme.text.opacity(0.4))
+                Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(Theme.tertiaryText)
+                    .help("Pinned")
+                    .accessibilityLabel("Pinned")
             }
             if session.status == .needsInput {
                 Circle().fill(session.status.dot)

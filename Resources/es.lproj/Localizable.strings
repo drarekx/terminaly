@@ -299,3 +299,7 @@
 "MCP servers" = "Servidores MCP";
 "No MCP servers set up for every project." = "No hay servidores MCP instalados para todos los proyectos.";
 "Each server is a separate process in every Claude Code session, often 100–300 MB. One switched off here stays installed but starts off in every project; turn it on for a project from the session's “…” menu." = "Cada servidor es un proceso aparte en cada sesión de Claude Code, a menudo de 100–300 MB. Uno apagado aquí sigue instalado pero arranca apagado en todos los proyectos; actívalo en un proyecto desde el menú «…» de la sesión.";
+
+/* Pin sessions and Clear Context */
+"Pin to Top" = "Fijar arriba";
+"Pinned" = "Fijada";

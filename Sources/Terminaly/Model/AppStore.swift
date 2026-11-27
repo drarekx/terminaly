@@ -121,7 +121,7 @@ final class AppStore {
     func sessions(in project: Project, archived: Bool = false) -> [Session] {
         sessions
             .filter { $0.projectID == project.id && $0.archived == archived }
-            .sorted { ($0.pinned ? 0 : 1, $0.createdAt) < ($1.pinned ? 0 : 1, $1.createdAt) }
+            .sorted(by: SessionOrder.precedes)
     }
 
     var currentWorkspace: Workspace? { workspaces.first { $0.id == selectedWorkspaceID } }
@@ -866,21 +866,13 @@ extension AppStore {
 extension AppStore {
     /// Sessions this one started (`tly new` run inside it) that are listed with it.
     func workers(of id: UUID) -> [Session] {
-        guard let parent = session(id), parent.parentID == nil || session(parent.parentID)?.projectID != parent.projectID
-        else { return [] }
-        return sessions
-            .filter { $0.parentID == id && !$0.archived && $0.projectID == parent.projectID }
-            .sorted { $0.createdAt < $1.createdAt }
+        SessionOrder.workers(of: id, in: sessions)
     }
 
     /// Sidebar order: every session followed by its workers. A worker whose parent is gone,
     /// archived or in another project is listed on its own.
     func sidebarSessions(in project: Project) -> [(session: Session, isWorker: Bool)] {
-        let all = sessions(in: project)
-        let nested = Set(all.filter { !$0.archived }.flatMap { workers(of: $0.id) }.map(\.id))
-        return all.filter { !nested.contains($0.id) }.flatMap { s in
-            [(s, false)] + (s.workersCollapsed == true ? [] : workers(of: s.id).map { ($0, true) })
-        }
+        SessionOrder.sidebar(sessions, project: project.id)
     }
 
     func toggleWorkersCollapsed(_ id: UUID) {
